@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Add Student</title>
+  <style>
+    video { width: 100%; height: auto; transform: scaleX(-1); border:1px solid #333; border-radius: 10px; }
+    input, button { padding: .5rem; margin-top:.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Add Student</h1>
+  <input type="text" id="studentName" placeholder="Enter student name" />
+  <div>
+    <video id="webcam" autoplay playsinline muted></video>
+  </div>
+  <button id="start">Start Camera</button>
+  <button id="capture" disabled>Add Student</button>
+  <div id="status"></div>
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <script>
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("canvas");
+    const startBtn = document.getElementById("start");
+    const captureBtn = document.getElementById("capture");
+    const statusEl = document.getElementById("status");
+    let stream;
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720},audio:false});
+        video.srcObject = stream;
+        await video.play();
+        startBtn.disabled = true;
+        captureBtn.disabled = false;
+        statusEl.textContent = "Camera live";
+      } catch(err) {
+        console.error(err);
+        statusEl.textContent = "Error: "+err.message;
+      }
+    }
+
+    function captureStudent() {
+      const name = document.getElementById("studentName").value.trim();
+      if(!name){ alert("Enter student name"); return; }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+      const imageData = canvas.toDataURL("image/png");
+
+      fetch("/add_student/",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "X-CSRFToken": getCookie("csrftoken")
+        },
+        body: JSON.stringify({name:name,image:imageData})
+      })
+      .then(r=>r.json())
+      .then(data=>{
+        if(data.error) statusEl.textContent="Error: "+data.error;
+        else statusEl.textContent=data.message;
+      });
+    }
+
+    function getCookie(name) {
+      let cookieValue=null;
+      if(document.cookie && document.cookie!==""){
+        document.cookie.split(";").forEach(c=>{
+          if(c.trim().startsWith(name+"=")){
+            cookieValue=decodeURIComponent(c.trim().substring(name.length+1));
+          }
+        });
+      }
+      return cookieValue;
+    }
+
+    startBtn.addEventListener("click", startCamera);
+    captureBtn.addEventListener("click", captureStudent);
+  </script>
+</body>
+</html>
