@@ -5,75 +5,367 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Add Student</title>
   <style>
-    video { width: 100%; height: auto; transform: scaleX(-1); border:1px solid #333; border-radius: 10px; }
-    input, button { padding: .5rem; margin-top:.5rem; }
+    :root { --w: 720px; }
+    body { 
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
+      background: #0b0e13; 
+      color: #e5e7eb; 
+      margin: 0; 
+      padding: 2rem; 
+    }
+    h1 { 
+      margin: 0 0 1rem; 
+      font-size: 1.8rem; 
+      font-weight: 600; 
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .wrap { max-width: var(--w); margin: 0 auto; }
+    
+    .nav-links {
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .nav-links a {
+      color: #3b82f6;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+    
+    .nav-links a:hover {
+      background: #1f2937;
+      border-color: #3b82f6;
+    }
+    
+    .form-section {
+      background: #111827;
+      border-radius: 16px;
+      border: 1px solid #1f2937;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      color: #d1d5db;
+    }
+    
+    input[type="text"], input[type="email"], input[type="tel"] {
+      width: 100%;
+      padding: 0.75rem;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 10px;
+      color: #e5e7eb;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+    
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 1px #3b82f6;
+    }
+    
+    .required {
+      color: #ef4444;
+    }
+    
+    .cam {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      border: 1px solid #1f2937;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #111827;
+      margin: 1rem 0;
+    }
+    
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+    
+    .controls {
+      margin-top: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    
+    button {
+      padding: 0.75rem 1.5rem;
+      border-radius: 10px;
+      border: 1px solid #374151;
+      background: #111827;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    button:hover:not(:disabled) {
+      background: #1f2937;
+      border-color: #3b82f6;
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .primary-btn {
+      background: #3b82f6;
+      border-color: #3b82f6;
+    }
+    
+    .primary-btn:hover:not(:disabled) {
+      background: #2563eb;
+    }
+    
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      text-align: center;
+    }
+    
+    .status.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #22c55e;
+    }
+    
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+    
+    .status.info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #3b82f6;
+    }
+    
+    .preview-section {
+      text-align: center;
+    }
+    
+    @media (max-width: 600px) {
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+      
+      .controls {
+        flex-direction: column;
+      }
+      
+      button {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Add Student</h1>
-  <input type="text" id="studentName" placeholder="Enter student name" />
-  <div>
-    <video id="webcam" autoplay playsinline muted></video>
+  <div class="wrap">
+    <div class="nav-links">
+      <a href="/">📷 Take Attendance</a>
+      <a href="/add_student/" style="background: #1f2937; border-color: #3b82f6;">👤 Add Student</a>
+      <a href="/view_records/">📊 View Records</a>
+      <a href="/ai_assistant/">🤖 AI Assistant</a>
+    </div>
+    
+    <h1>👤 Add New Student</h1>
+    
+    <div class="form-section">
+      <div class="form-group">
+        <label for="studentName">Student Name <span class="required">*</span></label>
+        <input type="text" id="studentName" placeholder="Enter full name" required />
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="studentId">Student ID (Optional)</label>
+          <input type="text" id="studentId" placeholder="e.g., STU001" />
+        </div>
+        <div class="form-group">
+          <label for="phone">Phone (Optional)</label>
+          <input type="tel" id="phone" placeholder="e.g., +1234567890" />
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="email">Email (Optional)</label>
+        <input type="email" id="email" placeholder="student@school.com" />
+      </div>
+    </div>
+    
+    <div class="form-section preview-section">
+      <h3 style="margin-top: 0; color: #d1d5db;">📸 Take Photo</h3>
+      <p style="color: #9ca3af; margin-bottom: 1rem;">Position yourself clearly in the camera frame</p>
+      
+      <div class="cam">
+        <video id="webcam" autoplay playsinline muted></video>
+      </div>
+      
+      <div class="controls">
+        <button id="start">Start Camera</button>
+        <button id="stop" disabled>Stop Camera</button>
+        <button id="capture" class="primary-btn" disabled>📸 Add Student</button>
+      </div>
+    </div>
+    
+    <div id="status" class="status info">Click "Start Camera" to begin</div>
+    <canvas id="canvas" style="display:none;"></canvas>
   </div>
-  <button id="start">Start Camera</button>
-  <button id="capture" disabled>Add Student</button>
-  <div id="status"></div>
-  <canvas id="canvas" style="display:none;"></canvas>
 
   <script>
     const video = document.getElementById("webcam");
     const canvas = document.getElementById("canvas");
     const startBtn = document.getElementById("start");
+    const stopBtn = document.getElementById("stop");
     const captureBtn = document.getElementById("capture");
     const statusEl = document.getElementById("status");
     let stream;
 
     async function startCamera() {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({video:{width:1280,height:720},audio:false});
+        statusEl.textContent = "Starting camera...";
+        statusEl.className = "status info";
+        
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: {ideal: 1280}, height: {ideal: 720} },
+          audio: false
+        });
+        
         video.srcObject = stream;
         await video.play();
+        
         startBtn.disabled = true;
+        stopBtn.disabled = false;
         captureBtn.disabled = false;
-        statusEl.textContent = "Camera live";
+        
+        statusEl.textContent = "Camera is live. Position yourself in the frame and click 'Add Student'";
+        statusEl.className = "status success";
+        
       } catch(err) {
         console.error(err);
-        statusEl.textContent = "Error: "+err.message;
+        statusEl.textContent = "Error: " + (err.message || err.name);
+        statusEl.className = "status error";
       }
+    }
+    
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        video.srcObject = null;
+      }
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      captureBtn.disabled = true;
+      statusEl.textContent = "Camera stopped. Click 'Start Camera' to begin";
+      statusEl.className = "status info";
     }
 
     function captureStudent() {
       const name = document.getElementById("studentName").value.trim();
-      if(!name){ alert("Enter student name"); return; }
+      const studentId = document.getElementById("studentId").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const phone = document.getElementById("phone").value.trim();
+      
+      if (!name) {
+        statusEl.textContent = "Please enter student name";
+        statusEl.className = "status error";
+        return;
+      }
+
+      statusEl.textContent = "Processing... Please wait";
+      statusEl.className = "status info";
+      captureBtn.disabled = true;
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const imageData = canvas.toDataURL("image/png");
 
-      fetch("/add_student/",{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
+      fetch("/add_student/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
           "X-CSRFToken": getCookie("csrftoken")
         },
-        body: JSON.stringify({name:name,image:imageData})
+        body: JSON.stringify({
+          name: name,
+          student_id: studentId,
+          email: email,
+          phone: phone,
+          image: imageData
+        })
       })
-      .then(r=>r.json())
-      .then(data=>{
-        if(data.error) statusEl.textContent="Error: "+data.error;
-        else statusEl.textContent=data.message;
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          statusEl.textContent = "Error: " + data.error;
+          statusEl.className = "status error";
+        } else {
+          statusEl.textContent = data.message;
+          statusEl.className = "status success";
+          
+          // Clear form after successful addition
+          document.getElementById("studentName").value = "";
+          document.getElementById("studentId").value = "";
+          document.getElementById("email").value = "";
+          document.getElementById("phone").value = "";
+          
+          // Stop camera
+          setTimeout(() => {
+            stopCamera();
+          }, 2000);
+        }
+      })
+      .catch(err => {
+        statusEl.textContent = "Network error: " + err.message;
+        statusEl.className = "status error";
+      })
+      .finally(() => {
+        captureBtn.disabled = false;
       });
     }
 
     function getCookie(name) {
-      let cookieValue=null;
-      if(document.cookie && document.cookie!==""){
-        document.cookie.split(";").forEach(c=>{
-          if(c.trim().startsWith(name+"=")){
-            cookieValue=decodeURIComponent(c.trim().substring(name.length+1));
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== "") {
+        document.cookie.split(";").forEach(c => {
+          if (c.trim().startsWith(name + "=")) {
+            cookieValue = decodeURIComponent(c.trim().substring(name.length + 1));
           }
         });
       }
@@ -81,7 +373,11 @@
     }
 
     startBtn.addEventListener("click", startCamera);
+    stopBtn.addEventListener("click", stopCamera);
     captureBtn.addEventListener("click", captureStudent);
+    
+    // Focus on name input
+    document.getElementById("studentName").focus();
   </script>
 </body>
 </html>

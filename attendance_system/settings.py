@@ -23,6 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-6hl+$od6d=rkb#neuhyg4r1v48(eoo3#nu)@gzi9%jby5bs8jx'
 
+# OpenAI API Key
+OPENAI_API_KEY = "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"
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -106,11 +109,11 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
 
+TIME_ZONE = 'America/Los_Angeles'
+USE_TZ = True
 USE_I18N = True
 
-USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)

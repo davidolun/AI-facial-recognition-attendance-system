@@ -3,28 +3,220 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Webcam</title>
+  <title>Webcam Attendance</title>
   <style>
     :root { --w: 720px; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0e13; color:#e5e7eb; margin:0; padding:2rem; }
-    h1 { margin: 0 0 1rem; font-size: 1.4rem; font-weight: 600; }
+    h1 { margin: 0 0 1rem; font-size: 1.8rem; font-weight: 600; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .wrap { max-width: var(--w); margin: 0 auto; }
+    
+    .nav-links {
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .nav-links a {
+      color: #3b82f6;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+    
+    .nav-links a:hover {
+      background: #1f2937;
+      border-color: #3b82f6;
+    }
+    
+    .session-control {
+      background: #111827;
+      border-radius: 12px;
+      border: 1px solid #1f2937;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .session-control h3 {
+      margin: 0 0 1rem 0;
+      color: #d1d5db;
+      font-size: 1.1rem;
+    }
+    
+    .session-select {
+      width: 100%;
+      padding: 0.75rem;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      color: #e5e7eb;
+      box-sizing: border-box;
+      font-size: 0.95rem;
+    }
+    
+    .session-select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    
+    .session-select option {
+      background: #1f2937;
+      color: #e5e7eb;
+    }
+    
+    .session-info {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #1f2937;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      display: none;
+    }
+    
+    .session-info.active {
+      display: block;
+    }
+    
+    .session-info h4 {
+      margin: 0 0 0.5rem 0;
+      color: #3b82f6;
+    }
+    
+    .session-details {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      font-size: 0.9rem;
+    }
+    
+    .session-details div {
+      color: #9ca3af;
+    }
+    
+    .session-details strong {
+      color: #e5e7eb;
+    }
+    
+    .attendance-progress {
+      margin-top: 1rem;
+      background: #111827;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    
+    .progress-bar {
+      height: 8px;
+      background: #3b82f6;
+      transition: width 0.3s ease;
+    }
+    
+    .progress-text {
+      padding: 0.5rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #9ca3af;
+    }
+    
     .cam { position: relative; width: 100%; aspect-ratio: 16/9; border: 1px solid #1f2937; border-radius: 16px; overflow: hidden; background:#111827; }
     video {
       width: 100%; height: 100%; object-fit: cover;
-      transform: scaleX(-1); /* mirror preview ONLY */
+      transform: scaleX(-1);
     }
-    .controls { margin-top: .75rem; display:flex; gap:.5rem; }
+    .controls { margin-top: .75rem; display:flex; gap:.5rem; flex-wrap: wrap; }
     button {
-      padding: .6rem .9rem; border-radius: 10px; border: 1px solid #374151; background: #111827; color:#e5e7eb;
-      cursor: pointer;
+      padding: .75rem 1.5rem; border-radius: 10px; border: 1px solid #374151; background: #111827; color:#e5e7eb;
+      cursor: pointer; font-weight: 500; transition: all 0.2s;
     }
-    .status { margin-top:.75rem; font-size:.95rem; opacity:.8; }
+    button:hover:not(:disabled) {
+      background: #1f2937;
+      border-color: #3b82f6;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .primary-btn {
+      background: #3b82f6;
+      border-color: #3b82f6;
+    }
+    .primary-btn:hover:not(:disabled) {
+      background: #2563eb;
+    }
+    .status { 
+      margin-top:.75rem; 
+      padding: 0.75rem;
+      border-radius: 10px;
+      font-size:.95rem; 
+      text-align: center;
+    }
+    .status.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #22c55e;
+    }
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+    .status.info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #3b82f6;
+    }
+    
+    .loading {
+      text-align: center;
+      color: #9ca3af;
+      font-style: italic;
+    }
+    
+    @media (max-width: 600px) {
+      .controls {
+        flex-direction: column;
+      }
+      button {
+        width: 100%;
+      }
+      .session-details {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Webcam Preview</h1>
+    <div class="nav-links">
+      <a href="/" style="background: #1f2937; border-color: #3b82f6;">📷 Take Attendance</a>
+      <a href="/add_student/">👤 Add Student</a>
+      <a href="/view_records/">📊 View Records</a>
+      <a href="/ai_assistant/">🤖 AI Assistant</a>
+    </div>
+    
+    <h1>📷 Face Recognition Attendance</h1>
+    
+    <div class="session-control">
+      <h3>📅 Select Session</h3>
+      <select id="sessionSelect" class="session-select">
+        <option value="">Loading sessions...</option>
+      </select>
+      
+      <div id="sessionInfo" class="session-info">
+        <h4 id="selectedSessionName">Session Name</h4>
+        <div class="session-details">
+          <div><strong>Date:</strong> <span id="sessionDate"></span></div>
+          <div><strong>Time:</strong> <span id="sessionTime"></span></div>
+          <div><strong>Status:</strong> <span id="sessionStatus"></span></div>
+        </div>
+        <div class="attendance-progress">
+          <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+          <div class="progress-text" id="progressText">0 / 0 students attended</div>
+        </div>
+      </div>
+    </div>
 
     <div class="cam" style="position:relative;">
       <video id="webcam" autoplay playsinline muted style="position:absolute; top:0; left:0;"></video>
@@ -32,12 +224,12 @@
     </div>
 
     <div class="controls">
-      <button id="start">Start camera</button>
-      <button id="stop" disabled>Stop</button>
-      <button id="capture" disabled>Take Attendance</button>
+      <button id="start" disabled>Start Camera</button>
+      <button id="stop" disabled>Stop Camera</button>
+      <button id="capture" class="primary-btn" disabled>📋 Take Attendance</button>
     </div>
 
-    <div id="status" class="status">Requesting camera access…</div>
+    <div id="status" class="status info">Please select a session first</div>
     <canvas id="canvas" style="display:none;"></canvas>
   </div>
 
@@ -45,43 +237,142 @@
 const video = document.getElementById('webcam');
 const overlay = document.getElementById('overlay');
 const overlayCtx = overlay.getContext('2d');
-const canvas = document.getElementById('canvas'); // hidden canvas for sending frame
+const canvas = document.getElementById('canvas');
 const startBtn = document.getElementById('start');
 const stopBtn  = document.getElementById('stop');
 const captureBtn = document.getElementById('capture');
 const statusEl = document.getElementById('status');
+const sessionSelect = document.getElementById('sessionSelect');
+const sessionInfo = document.getElementById('sessionInfo');
 
 let stream;
 let faceData = [];
+let selectedSession = null;
+let sessions = [];
+
+// Load sessions on page load
+async function loadSessions() {
+    try {
+        const response = await fetch('/get_sessions/');
+        const data = await response.json();
+        
+        if (data.sessions) {
+            sessions = data.sessions;
+            populateSessionSelect();
+        } else {
+            sessionSelect.innerHTML = '<option value="">No sessions available</option>';
+            statusEl.textContent = 'No sessions found. Please create sessions first.';
+            statusEl.className = 'status error';
+        }
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+        sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
+        statusEl.textContent = 'Error loading sessions';
+        statusEl.className = 'status error';
+    }
+}
+
+function populateSessionSelect() {
+    sessionSelect.innerHTML = '<option value="">Select a session...</option>';
+    
+    // Group sessions by date
+    const today = new Date().toDateString();
+    const todaySessions = sessions.filter(s => new Date(s.date).toDateString() === today);
+    const upcomingSessions = sessions.filter(s => new Date(s.date).toDateString() !== today);
+    
+    if (todaySessions.length > 0) {
+        const todayGroup = document.createElement('optgroup');
+        todayGroup.label = 'Today';
+        todaySessions.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.id;
+            option.textContent = `${session.name} (${session.start_time} - ${session.end_time})`;
+            todayGroup.appendChild(option);
+        });
+        sessionSelect.appendChild(todayGroup);
+    }
+    
+    if (upcomingSessions.length > 0) {
+        const upcomingGroup = document.createElement('optgroup');
+        upcomingGroup.label = 'Upcoming';
+        upcomingSessions.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.id;
+            option.textContent = `${session.name} - ${session.date_display} (${session.start_time})`;
+            upcomingGroup.appendChild(option);
+        });
+        sessionSelect.appendChild(upcomingGroup);
+    }
+}
+
+function updateSessionInfo() {
+    const sessionId = sessionSelect.value;
+    if (!sessionId) {
+        sessionInfo.classList.remove('active');
+        startBtn.disabled = true;
+        statusEl.textContent = 'Please select a session first';
+        statusEl.className = 'status info';
+        selectedSession = null;
+        return;
+    }
+    
+    selectedSession = sessions.find(s => s.id == sessionId);
+    if (!selectedSession) return;
+    
+    // Update session info display
+    document.getElementById('selectedSessionName').textContent = selectedSession.name;
+    document.getElementById('sessionDate').textContent = selectedSession.date_display;
+    document.getElementById('sessionTime').textContent = `${selectedSession.start_time} - ${selectedSession.end_time}`;
+    document.getElementById('sessionStatus').textContent = selectedSession.status;
+    
+    // Update progress
+    const progressPercent = selectedSession.total_students > 0 
+        ? (selectedSession.attendance_count / selectedSession.total_students) * 100 
+        : 0;
+    document.getElementById('progressBar').style.width = progressPercent + '%';
+    document.getElementById('progressText').textContent = 
+        `${selectedSession.attendance_count} / ${selectedSession.total_students} students attended`;
+    
+    sessionInfo.classList.add('active');
+    startBtn.disabled = false;
+    statusEl.textContent = 'Session selected. Click "Start Camera" to begin attendance';
+    statusEl.className = 'status success';
+}
 
 // Start camera
 async function startCamera() {
+    if (!selectedSession) {
+        statusEl.textContent = 'Please select a session first';
+        statusEl.className = 'status error';
+        return;
+    }
+    
     try {
         statusEl.textContent = 'Starting camera…';
+        statusEl.className = 'status info';
+        
         stream = await navigator.mediaDevices.getUserMedia({
             video: { width: {ideal:1280}, height:{ideal:720} },
             audio: false
         });
         video.srcObject = stream;
         await video.play();
-        statusEl.textContent = 'Camera is live.';
+        statusEl.textContent = `Camera is live for ${selectedSession.name}. Face detection active.`;
+        statusEl.className = 'status success';
         startBtn.disabled = true;
         stopBtn.disabled  = false;
         captureBtn.disabled = false;
 
-        // Set overlay canvas size to match video display
         resizeOverlay();
-        
-        // Start live detection and drawing
         updateFaceData();
         drawRectangles();
     } catch (err) {
         console.error(err);
         statusEl.textContent = 'Error: ' + (err.message || err.name);
+        statusEl.className = 'status error';
     }
 }
 
-// Resize overlay to match video display size
 function resizeOverlay() {
     const rect = video.getBoundingClientRect();
     overlay.width = rect.width;
@@ -90,19 +381,18 @@ function resizeOverlay() {
     overlay.style.height = rect.height + 'px';
 }
 
-// Stop camera
 function stopCamera() {
     if (stream) {
         stream.getTracks().forEach(t => t.stop());
         video.srcObject = null;
     }
     statusEl.textContent = 'Camera stopped.';
+    statusEl.className = 'status info';
     startBtn.disabled = false;
-    stopBtn.disabled  = true;
+    stopBtn.disabled = true;
     captureBtn.disabled = true;
 }
 
-// Send frame to server for live face detection
 async function updateFaceData() {
     if (!video.videoWidth) {
         setTimeout(updateFaceData, 500);
@@ -131,24 +421,18 @@ async function updateFaceData() {
         console.error("Face detection error:", err);
     }
 
-    setTimeout(updateFaceData, 500); // repeat every 500ms
+    setTimeout(updateFaceData, 500);
 }
 
-// Draw rectangles around detected faces
 function drawRectangles() {
-    // Clear the canvas
     overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-
-    // Set rectangle style
-    overlayCtx.strokeStyle = "red";
+    overlayCtx.strokeStyle = "#22c55e";
     overlayCtx.lineWidth = 3;
 
-    // Calculate scale factors
     const scaleX = overlay.width / video.videoWidth;
     const scaleY = overlay.height / video.videoHeight;
 
     faceData.forEach(f => {
-        // Scale coordinates from video resolution to display size
         const x = f.left * scaleX;
         const y = f.top * scaleY;
         const w = (f.right - f.left) * scaleX;
@@ -160,29 +444,66 @@ function drawRectangles() {
     requestAnimationFrame(drawRectangles);
 }
 
-// Capture frame for attendance
 function captureFrame() {
+    if (!selectedSession) {
+        statusEl.textContent = 'Please select a session first';
+        statusEl.className = 'status error';
+        return;
+    }
+    
+    statusEl.textContent = 'Processing attendance...';
+    statusEl.className = 'status info';
+    captureBtn.disabled = true;
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = canvas.toDataURL('image/png');
 
-    fetch("/take_attendance/", {
+    fetch("/take_attendance_with_session/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
             "X-CSRFToken": getCookie("csrftoken"),
         },
-        body: JSON.stringify({ image: imageData })
+        body: JSON.stringify({ 
+            image: imageData,
+            session_id: selectedSession.id
+        })
     })
     .then(r => r.json())
     .then(data => {
-        statusEl.textContent = "Attendance: " + (data.message || data.error);
+        if (data.error) {
+            statusEl.textContent = "Error: " + data.error;
+            statusEl.className = 'status error';
+        } else {
+            statusEl.textContent = data.message;
+            statusEl.className = 'status success';
+            
+            // Update progress display
+            if (data.attendance_count !== undefined) {
+                const progressPercent = data.total_students > 0 
+                    ? (data.attendance_count / data.total_students) * 100 
+                    : 0;
+                document.getElementById('progressBar').style.width = progressPercent + '%';
+                document.getElementById('progressText').textContent = 
+                    `${data.attendance_count} / ${data.total_students} students attended`;
+                    
+                // Update selected session data
+                selectedSession.attendance_count = data.attendance_count;
+            }
+        }
+    })
+    .catch(err => {
+        statusEl.textContent = "Network error: " + err.message;
+        statusEl.className = 'status error';
+    })
+    .finally(() => {
+        captureBtn.disabled = false;
     });
 }
 
-// Utility to get CSRF cookie
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== "") {
@@ -198,12 +519,15 @@ function getCookie(name) {
     return cookieValue;
 }
 
-// Handle window resize
-window.addEventListener('resize', resizeOverlay);
-
+// Event listeners
+sessionSelect.addEventListener('change', updateSessionInfo);
 startBtn.addEventListener('click', startCamera);
 stopBtn.addEventListener('click', stopCamera);
 captureBtn.addEventListener('click', captureFrame);
+window.addEventListener('resize', resizeOverlay);
+
+// Initialize
+loadSessions();
 </script>
 
 </body>
