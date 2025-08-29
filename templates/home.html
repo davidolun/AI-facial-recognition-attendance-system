@@ -26,15 +26,15 @@
   <div class="wrap">
     <h1>Webcam Preview</h1>
 
-    <div class="cam">
-      <video id="webcam" autoplay playsinline muted></video>
+    <div class="cam" style="position:relative;">
+      <video id="webcam" autoplay playsinline muted style="position:absolute; top:0; left:0;"></video>
+      <canvas id="overlay" style="position:absolute; top:0; left:0; pointer-events: none; transform: scaleX(-1);"></canvas>
     </div>
 
     <div class="controls">
       <button id="start">Start camera</button>
       <button id="stop" disabled>Stop</button>
       <button id="capture" disabled>Take Attendance</button>
-
     </div>
 
     <div id="status" class="status">Requesting camera access…</div>
@@ -42,20 +42,25 @@
   </div>
 
   <script>
-    const video = document.getElementById('webcam');
-    const canvas = document.getElementById('canvas');
-    const startBtn = document.getElementById('start');
-    const stopBtn  = document.getElementById('stop');
-    const captureBtn = document.getElementById('capture');
-    const statusEl = document.getElementById('status');
-    let stream;
+const video = document.getElementById('webcam');
+const overlay = document.getElementById('overlay');
+const overlayCtx = overlay.getContext('2d');
+const canvas = document.getElementById('canvas'); // hidden canvas for sending frame
+const startBtn = document.getElementById('start');
+const stopBtn  = document.getElementById('stop');
+const captureBtn = document.getElementById('capture');
+const statusEl = document.getElementById('status');
 
-    async function startCamera() {
-      try {
+let stream;
+let faceData = [];
+
+// Start camera
+async function startCamera() {
+    try {
         statusEl.textContent = 'Starting camera…';
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: {ideal:1280}, height:{ideal:720} },
-          audio: false
+            video: { width: {ideal:1280}, height:{ideal:720} },
+            audio: false
         });
         video.srcObject = stream;
         await video.play();
@@ -63,72 +68,143 @@
         startBtn.disabled = true;
         stopBtn.disabled  = false;
         captureBtn.disabled = false;
-      } catch (err) {
+
+        // Set overlay canvas size to match video display
+        resizeOverlay();
+        
+        // Start live detection and drawing
+        updateFaceData();
+        drawRectangles();
+    } catch (err) {
         console.error(err);
         statusEl.textContent = 'Error: ' + (err.message || err.name);
-      }
     }
+}
 
-    function stopCamera() {
-      if (stream) {
+// Resize overlay to match video display size
+function resizeOverlay() {
+    const rect = video.getBoundingClientRect();
+    overlay.width = rect.width;
+    overlay.height = rect.height;
+    overlay.style.width = rect.width + 'px';
+    overlay.style.height = rect.height + 'px';
+}
+
+// Stop camera
+function stopCamera() {
+    if (stream) {
         stream.getTracks().forEach(t => t.stop());
         video.srcObject = null;
-      }
-      statusEl.textContent = 'Camera stopped.';
-      startBtn.disabled = false;
-      stopBtn.disabled  = true;
-      captureBtn.disabled = true;
+    }
+    statusEl.textContent = 'Camera stopped.';
+    startBtn.disabled = false;
+    stopBtn.disabled  = true;
+    captureBtn.disabled = true;
+}
+
+// Send frame to server for live face detection
+async function updateFaceData() {
+    if (!video.videoWidth) {
+        setTimeout(updateFaceData, 500);
+        return;
     }
 
-    function captureFrame() {
-      // draw RAW frame (NOT mirrored) onto canvas
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL('image/png');
 
-      // convert to base64 for sending to Django
-      const imageData = canvas.toDataURL('image/png');
+    try {
+        const response = await fetch("/detect_faces/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ image: imageData })
+        });
 
-      // Example: send to Django endpoint
-      fetch("/take_attendance/", {
+        const data = await response.json();
+        faceData = data.faces || [];
+    } catch (err) {
+        console.error("Face detection error:", err);
+    }
+
+    setTimeout(updateFaceData, 500); // repeat every 500ms
+}
+
+// Draw rectangles around detected faces
+function drawRectangles() {
+    // Clear the canvas
+    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+    // Set rectangle style
+    overlayCtx.strokeStyle = "red";
+    overlayCtx.lineWidth = 3;
+
+    // Calculate scale factors
+    const scaleX = overlay.width / video.videoWidth;
+    const scaleY = overlay.height / video.videoHeight;
+
+    faceData.forEach(f => {
+        // Scale coordinates from video resolution to display size
+        const x = f.left * scaleX;
+        const y = f.top * scaleY;
+        const w = (f.right - f.left) * scaleX;
+        const h = (f.bottom - f.top) * scaleY;
+        
+        overlayCtx.strokeRect(x, y, w, h);
+    });
+
+    requestAnimationFrame(drawRectangles);
+}
+
+// Capture frame for attendance
+function captureFrame() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL('image/png');
+
+    fetch("/take_attendance/", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCookie("csrftoken"),
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
         },
         body: JSON.stringify({ image: imageData })
-      })
-      .then(r => r.json())
-      .then(data => {
-    if (data.message) {
-        statusEl.textContent = "Frame sent: " + data.message;
-    } else if (data.error) {
-        statusEl.textContent = "Error: " + data.error;
-    } else {
-        statusEl.textContent = "Unknown response from server";
-    }
-});
-    }
+    })
+    .then(r => r.json())
+    .then(data => {
+        statusEl.textContent = "Attendance: " + (data.message || data.error);
+    });
+}
 
-    function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== "") {
+// Utility to get CSRF cookie
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
         const cookies = document.cookie.split(";");
         for (let cookie of cookies) {
-          cookie = cookie.trim();
-          if (cookie.startsWith(name + "=")) {
-            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-            break;
-          }
+            cookie = cookie.trim();
+            if (cookie.startsWith(name + "=")) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
         }
-      }
-      return cookieValue;
     }
+    return cookieValue;
+}
 
-    startBtn.addEventListener('click', startCamera);
-    stopBtn.addEventListener('click', stopCamera);
-    captureBtn.addEventListener('click', captureFrame);
-  </script>
+// Handle window resize
+window.addEventListener('resize', resizeOverlay);
+
+startBtn.addEventListener('click', startCamera);
+stopBtn.addEventListener('click', stopCamera);
+captureBtn.addEventListener('click', captureFrame);
+</script>
+
 </body>
 </html>

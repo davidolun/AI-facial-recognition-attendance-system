@@ -16,79 +16,67 @@ def home(request):
 
 @csrf_exempt
 def take_attendance(request):
-    if request.method != "POST":
-        return JsonResponse({"message": "Use POST request."})
+    if request.method == "POST":
+        try:
+            import json, base64, re, datetime, os, face_recognition, cv2, numpy as np
 
-    try:
-        # Load image from JS
-        data = json.loads(request.body)
-        image_data = data.get("image")
-        if not image_data:
-            return JsonResponse({"error": "No image received"}, status=400)
+            data = json.loads(request.body)
+            image_data = data.get("image")
+            if not image_data:
+                return JsonResponse({"error": "No image received"}, status=400)
 
-        # Decode base64 image
-        img_str = re.sub("^data:image/.+;base64,", "", image_data)
-        img_bytes = base64.b64decode(img_str)
+            # decode image
+            img_str = re.sub("^data:image/.+;base64,", "", image_data)
+            img_bytes = base64.b64decode(img_str)
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        # Convert to OpenCV image
-        nparr = np.frombuffer(img_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # detect faces
+            face_locations = face_recognition.face_locations(rgb_frame)
 
-        # Load student images
-        students_dir = os.path.join(settings.BASE_DIR, "students")
-        os.makedirs(students_dir, exist_ok=True)
-        student_encodings = []
-        student_names = []
+            if not face_locations:
+                return JsonResponse({"message": "No face detected", "faces": []})
 
-        for file in os.listdir(students_dir):
-            if file.endswith(".jpg") or file.endswith(".png"):
-                path = os.path.join(students_dir, file)
-                img = face_recognition.load_image_file(path)
-                enc = face_recognition.face_encodings(img)
-                if enc:
-                    student_encodings.append(enc[0])
-                    student_names.append(file.rsplit(".", 1)[0])
+            # Prepare face rectangles for JS: [top, right, bottom, left]
+            faces_for_js = [{"top": f[0], "right": f[1], "bottom": f[2], "left": f[3]} for f in face_locations]
 
-        # Detect faces in frame
-        face_locations = face_recognition.face_locations(rgb_frame)
-        if not face_locations:
-            return JsonResponse({"message": "No face detected."})
+            # Face recognition part (optional)
+            students_dir = os.path.join(settings.BASE_DIR, "students")
+            student_encodings = []
+            student_names = []
 
-        # Encode faces safely
-        face_encodings = []
-        for loc in face_locations:
-            encodings = face_recognition.face_encodings(rgb_frame, known_face_locations=[loc])
-            if encodings:
-                face_encodings.append(encodings[0])
+            for file in os.listdir(students_dir):
+                if file.endswith(".jpg") or file.endswith(".png"):
+                    img = face_recognition.load_image_file(os.path.join(students_dir, file))
+                    enc = face_recognition.face_encodings(img)
+                    if enc:
+                        student_encodings.append(enc[0])
+                        student_names.append(file.rsplit(".", 1)[0])
 
-        if not face_encodings:
-            return JsonResponse({"message": "No faces could be encoded."})
+            recognized = []
+            face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+            for face_encoding in face_encodings:
+                matches = face_recognition.compare_faces(student_encodings, face_encoding)
+                if True in matches:
+                    match_index = matches.index(True)
+                    name = student_names[match_index]
+                    recognized.append(name)
 
-        recognized = []
-        for encoding in face_encodings:
-            matches = face_recognition.compare_faces(student_encodings, encoding)
-            if True in matches:
-                match_index = matches.index(True)
-                name = student_names[match_index]
-                recognized.append(name)
+                    # log attendance
+                    now = datetime.datetime.now()
+                    time_str = now.strftime("%H:%M:%S")
+                    date_str = now.strftime("%Y-%m-%d")
+                    log_path = os.path.join(settings.BASE_DIR, "attendance.csv")
+                    with open(log_path, "a") as f:
+                        f.write(f"{name},{time_str},{date_str}\n")
 
-                # Log attendance
-                now = datetime.datetime.now()
-                time_str = now.strftime("%H:%M:%S")
-                date_str = now.strftime("%Y-%m-%d")
-                log_path = os.path.join(settings.BASE_DIR, "attendance.csv")
-                with open(log_path, "a") as f:
-                    f.write(f"{name},{time_str},{date_str}\n")
+            return JsonResponse({"message": f"Attendance taken: {', '.join(recognized) if recognized else 'No match'}",
+                                 "faces": faces_for_js})
 
-        if recognized:
-            return JsonResponse({"message": f"Attendance taken: {', '.join(recognized)}"})
-        else:
-            return JsonResponse({"message": "No recognized faces found."})
-
-    except Exception as e:
-        print("ERROR in take_attendance:", e)
-        return JsonResponse({"error": str(e)}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse({"message": "Use POST request."})
 
 @csrf_exempt
 def add_student(request):
@@ -134,6 +122,33 @@ def add_student(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return render(request, "add_student.html")
+
+@csrf_exempt
+def detect_faces(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            image_data = data.get("image")
+            if not image_data:
+                return JsonResponse({"faces": []})
+
+            # Decode base64 image
+            img_str = re.sub("^data:image/.+;base64,", "", image_data)
+            img_bytes = base64.b64decode(img_str)
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            rgb_frame = frame[:, :, ::-1]  # BGR -> RGB
+
+            # Detect faces
+            face_locations = face_recognition.face_locations(rgb_frame)
+            faces_list = []
+            for top, right, bottom, left in face_locations:
+                faces_list.append({"top": top, "right": right, "bottom": bottom, "left": left})
+
+            return JsonResponse({"faces": faces_list})
+        except Exception as e:
+            return JsonResponse({"error": str(e), "faces": []})
+    return JsonResponse({"faces": []})
 
 def view_records(request):
     
