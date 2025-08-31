@@ -10,5 +10,7 @@ urlpatterns = [
     path('ai_assistant/', views.ai_assistant, name='ai_assistant'),
     path('take_attendance_with_session/', views.take_attendance_with_session, name='take_attendance_with_session'),  # New one
     path('get_sessions/', views.get_sessions, name='get_sessions'),  # New endpoint to get sessions
-    path('create_session/', views.create_session, name='create_session'), 
-            ]
+    path('create_session/', views.create_session, name='create_session'),
+    path('dashboard/', views.dashboard, name='dashboard'),
+    path('dashboard_data/', views.dashboard_data, name='dashboard_data'),
+    path('export_data/', views.export_data, name='export_data'),]

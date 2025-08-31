@@ -16,6 +16,8 @@ from datetime import datetime, date, timedelta
 from django.conf import settings
 import json
 from .models import Student, AttendanceRecord, AttendanceSession, AIQuery
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.http import require_http_methods
 
 # Initialize OpenAI client with new API
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -618,3 +620,123 @@ def create_session(request):
             return JsonResponse({"error": str(e)}, status=400)
     
     return JsonResponse({"error": "Use POST request"}, status=405)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def dashboard_data(request):
+    """
+    Enhanced API endpoint that returns comprehensive attendance data for the dashboard
+    """
+    try:
+        # Get complete attendance data
+        data = get_complete_attendance_data()
+        
+        # Add additional analytics
+        data['analytics'] = {
+            'total_records': len(data['all_attendance_records']),
+            'late_percentage': 0,
+            'best_performing_student': None,
+            'worst_performing_student': None,
+            'most_attended_session': None,
+            'least_attended_session': None
+        }
+        
+        # Calculate late percentage
+        if data['all_attendance_records']:
+            late_records = [r for r in data['all_attendance_records'] if r['is_late']]
+            data['analytics']['late_percentage'] = round((len(late_records) / len(data['all_attendance_records'])) * 100, 2)
+        
+        # Find best and worst performing students
+        if data['student_statistics']:
+            students_by_performance = sorted(
+                data['student_statistics'].items(), 
+                key=lambda x: x[1]['attendance_percentage'], 
+                reverse=True
+            )
+            if students_by_performance:
+                data['analytics']['best_performing_student'] = {
+                    'name': students_by_performance[0][0],
+                    'percentage': students_by_performance[0][1]['attendance_percentage']
+                }
+                data['analytics']['worst_performing_student'] = {
+                    'name': students_by_performance[-1][0],
+                    'percentage': students_by_performance[-1][1]['attendance_percentage']
+                }
+        
+        # Find most and least attended sessions
+        if data['session_details']:
+            sessions_by_attendance = sorted(
+                data['session_details'].items(),
+                key=lambda x: x[1]['present_count'],
+                reverse=True
+            )
+            if sessions_by_attendance:
+                data['analytics']['most_attended_session'] = {
+                    'name': sessions_by_attendance[0][1]['session_info']['name'],
+                    'count': sessions_by_attendance[0][1]['present_count']
+                }
+                data['analytics']['least_attended_session'] = {
+                    'name': sessions_by_attendance[-1][1]['session_info']['name'],
+                    'count': sessions_by_attendance[-1][1]['present_count']
+                }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+def dashboard(request):
+    """
+    Render the main dashboard page
+    """
+    return render(request, 'dashboard.html')
+
+
+@csrf_exempt
+def export_data(request):
+    """
+    Export attendance data in various formats
+    """
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            export_type = data.get("type", "csv")  # csv, excel, pdf
+            date_from = data.get("date_from")
+            date_to = data.get("date_to")
+            
+            # Get filtered data
+            attendance_data = get_complete_attendance_data()
+            
+            if export_type == "csv":
+                # Create CSV content
+                import csv
+                from io import StringIO
+                
+                output = StringIO()
+                writer = csv.writer(output)
+                
+                # Write headers
+                writer.writerow(['Student Name', 'Session', 'Date', 'Time', 'Status', 'Late'])
+                
+                # Write data
+                for record in attendance_data['all_attendance_records']:
+                    writer.writerow([
+                        record['student__name'],
+                        record['session__name'] if record['session__name'] else 'N/A',
+                        record['date'],
+                        record['time'],
+                        'Present',
+                        'Yes' if record['is_late'] else 'No'
+                    ])
+                
+                response = HttpResponse(output.getvalue(), content_type='text/csv')
+                response['Content-Disposition'] = 'attachment; filename="attendance_data.csv"'
+                return response
+                
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
