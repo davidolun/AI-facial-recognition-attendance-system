@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Analytics Dashboard</title>
+    <!-- Fixed Chart.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
+    <style>
+        :root { --w: 1200px; }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: #0b0e13;
+            color: #e5e7eb;
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .dashboard-container {
+            max-width: var(--w);
+            margin: 0 auto;
+        }
+
+        .nav-links {
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .nav-links a {
+            color: #3b82f6;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        .nav-links a:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+        
+        .nav-links a.active {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+
+        h1 {
+            margin: 0 0 1rem;
+            font-size: 1.8rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #3b82f6;
+        }
+
+        .stat-label {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .heatmap-cell {
+            position: absolute;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .heatmap-labels {
+            position: absolute;
+            font-size: 11px;
+            font-weight: 500;
+            color: #9ca3af;
+        }
+
+        .chart-container {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #d1d5db;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .chart-canvas {
+            max-height: 300px;
+        }
+
+        .table-container {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #374151;
+        }
+
+        .data-table th {
+            background: #1f2937;
+            color: #e5e7eb;
+            font-weight: 600;
+        }
+
+        .data-table tr:hover {
+            background: #1f2937;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #9ca3af;
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            border: 1px solid #374151;
+            background: #111827;
+            color: #e5e7eb;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+
+        .primary-btn {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .primary-btn:hover {
+            background: #2563eb;
+        }
+
+        .demo-mode {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            color: #fbbf24;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .interactive-controls {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 20px;
+            align-items: end;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #d1d5db;
+            font-size: 0.9rem;
+        }
+
+        .control-select {
+            padding: 10px 15px;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            background: #1f2937;
+            color: #e5e7eb;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .control-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .control-select option {
+            background: #1f2937;
+            color: #e5e7eb;
+        }
+
+        .session-details-card {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid #3b82f6;
+        }
+
+        .session-header {
+            margin-bottom: 20px;
+        }
+
+        .session-header h3 {
+            font-size: 1.4rem;
+            color: #d1d5db;
+            margin-bottom: 15px;
+        }
+
+        .session-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .session-stat {
+            text-align: center;
+            padding: 15px;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 10px;
+        }
+
+        .session-stat .stat-number {
+            display: block;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #3b82f6;
+            margin-bottom: 5px;
+        }
+
+        .session-stat .stat-label {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .students-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        .present-students h4,
+        .absent-students h4 {
+            margin-bottom: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .present-students h4 {
+            color: #22c55e;
+        }
+
+        .absent-students h4 {
+            color: #ef4444;
+        }
+
+        .students-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .student-item {
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .present-student {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+            border-left: 3px solid #22c55e;
+        }
+
+        .absent-student {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+            border-left: 3px solid #ef4444;
+        }
+
+        .late-badge {
+            background: #fbbf24;
+            color: #0b0e13;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .interactive-controls {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .students-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .session-stats {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-overview {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .nav-links {
+                flex-direction: column;
+            }
+            
+            .nav-links a {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Navigation Links -->
+        <div class="nav-links">
+            <a href="/">📷 Take Attendance</a>
+            <a href="/add_student/">👤 Add Student</a>
+            <a href="/dashboard/" class="active">📊 View Records</a>
+            <a href="/ai_assistant/">🤖 AI Assistant</a>
+        </div>
+        
+        <!-- Header -->
+        <h1>📊 Attendance Dashboard</h1>
+        <p style="margin-bottom: 1.5rem; color: #9ca3af;">Simple attendance tracking and analytics</p>
+
+        <!-- Demo Mode Notice -->
+        <div class="demo-mode">
+            📊 Demo Mode: Showing sample data for demonstration purposes
+        </div>
+
+        <!-- Interactive Controls -->
+        <div class="interactive-controls">
+            <div class="control-group">
+                <label for="sessionSelect">📚 Select Session:</label>
+                <select id="sessionSelect" class="control-select" onchange="updateSessionData()">
+                    <option value="">All Sessions</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="dateSelect">📅 Select Date:</label>
+                <input type="date" id="dateSelect" class="control-select" onchange="updateSessionData()">
+            </div>
+            <button class="btn primary-btn" onclick="updateDashboard()">🔄 Refresh Data</button>
+        </div>
+
+        <!-- Session Details Card -->
+        <div id="sessionDetailsCard" class="session-details-card" style="display: none;">
+            <div class="session-header">
+                <h3 id="sessionTitle">📋 Session Details</h3>
+                <div class="session-stats">
+                    <div class="session-stat">
+                        <span class="stat-number" id="sessionPresent">0</span>
+                        <span class="stat-label">Present</span>
+                    </div>
+                    <div class="session-stat">
+                        <span class="stat-number" id="sessionAbsent">0</span>
+                        <span class="stat-label">Absent</span>
+                    </div>
+                    <div class="session-stat">
+                        <span class="stat-number" id="sessionPercentage">0%</span>
+                        <span class="stat-label">Attendance</span>
+                    </div>
+                </div>
+            </div>
+            <div class="session-students">
+                <div class="students-grid">
+                    <div class="present-students">
+                        <h4>✅ Present Students</h4>
+                        <div id="presentStudentsList" class="students-list"></div>
+                    </div>
+                    <div class="absent-students">
+                        <h4>❌ Absent Students</h4>
+                        <div id="absentStudentsList" class="students-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+        <!-- Stats Overview -->
+        <div class="stats-overview">
+            <div class="stat-card">
+                <div class="stat-number" id="totalStudents">0</div>
+                <div class="stat-label">Total Students</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalSessions">0</div>
+                <div class="stat-label">Total Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalRecords">0</div>
+                <div class="stat-label">Total Records</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgAttendance">0%</div>
+                <div class="stat-label">Avg Attendance</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h3 class="chart-title">📈 Daily Attendance Trends</h3>
+                <canvas id="dailyChart" class="chart-canvas"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="chart-title">🎯 Student Performance</h3>
+                <canvas id="studentChart" class="chart-canvas"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="chart-title">⏰ Late Arrivals Analysis</h3>
+                <canvas id="lateChart" class="chart-canvas"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 class="chart-title">🔥 Weekly Attendance Heatmap</h3>
+                <div id="heatmapContainer" style="height: 300px; position: relative;">
+                    <canvas id="heatmapChart" class="chart-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Students Table -->
+        <div class="table-container">
+            <h3 class="chart-title">Student Performance</h3>
+            <table class="data-table" id="studentsTable">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Sessions Attended</th>
+                        <th>Times Late</th>
+                        <th>Attendance %</th>
+                    </tr>
+                </thead>
+                <tbody id="studentsTableBody">
+                    <tr><td colspan="4" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Sessions Table -->
+        <div class="table-container">
+            <h3 class="chart-title">Recent Sessions</h3>
+            <table class="data-table" id="sessionsTable">
+                <thead>
+                    <tr>
+                        <th>Session Name</th>
+                        <th>Date</th>
+                        <th>Present</th>
+                        <th>Absent</th>
+                        <th>Attendance %</th>
+                    </tr>
+                </thead>
+                <tbody id="sessionsTableBody">
+                    <tr><td colspan="5" class="loading">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let dashboardData = null;
+        let charts = {};
+
+        // Generate sample data with more realistic session distribution
+        function generateSampleData() {
+            const students = ["John Doe", "Jane Smith", "Bob Johnson", "Alice Brown", "Charlie Davis", "Emma Wilson", "Michael Chen", "Sarah Lee", "David Kim", "Lisa Garcia"];
+            const sessions = ["Math 101", "Science 101", "English 101", "History 101", "Art Class", "PE Class"];
+            const records = [];
+            
+            // Generate 30 days of attendance records with multiple sessions per day
+            for (let i = 0; i < 30; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                // Create more varied session distribution
+                sessions.forEach(sessionName => {
+                    // Only create this session 50% of the time
+                    if (Math.random() > 0.5) return;
+                    
+                    students.forEach(student => {
+                        if (Math.random() > 0.15) { // 85% attendance rate
+                            records.push({
+                                student__name: student,
+                                session__name: sessionName,
+                                date: dateStr,
+                                time: `${8 + Math.floor(Math.random() * 4)}:${Math.random() > 0.5 ? '00' : '30'}`,
+                                is_late: Math.random() > 0.8 // 20% late rate
+                            });
+                        }
+                    });
+                });
+            }
+
+            // Get unique sessions that actually have records
+            const uniqueSessions = [...new Set(records.map(r => r.session__name))];
+
+            return {
+                total_students: students.length,
+                total_sessions: uniqueSessions.length,
+                all_attendance_records: records,
+                students_list: students,
+                sessions_list: uniqueSessions, // This is what populates the dropdown
+                student_statistics: {
+                    "John Doe": { total_sessions_attended: 28, times_late: 3, attendance_percentage: 95 },
+                    "Jane Smith": { total_sessions_attended: 25, times_late: 1, attendance_percentage: 87 },
+                    "Bob Johnson": { total_sessions_attended: 30, times_late: 0, attendance_percentage: 100 },
+                    "Alice Brown": { total_sessions_attended: 22, times_late: 5, attendance_percentage: 82 },
+                    "Charlie Davis": { total_sessions_attended: 20, times_late: 8, attendance_percentage: 75 },
+                    "Emma Wilson": { total_sessions_attended: 26, times_late: 2, attendance_percentage: 91 },
+                    "Michael Chen": { total_sessions_attended: 29, times_late: 1, attendance_percentage: 98 },
+                    "Sarah Lee": { total_sessions_attended: 24, times_late: 4, attendance_percentage: 85 },
+                    "David Kim": { total_sessions_attended: 27, times_late: 2, attendance_percentage: 93 },
+                    "Lisa Garcia": { total_sessions_attended: 21, times_late: 6, attendance_percentage: 78 }
+                },
+                session_details: {
+                    "math_101": { session_info: { name: "Math 101", date: "2024-11-20" }, present_count: 23, absent_count: 2 },
+                    "science_101": { session_info: { name: "Science 101", date: "2024-11-19" }, present_count: 20, absent_count: 5 },
+                    "english_101": { session_info: { name: "English 101", date: "2024-11-18" }, present_count: 24, absent_count: 1 },
+                    "history_101": { session_info: { name: "History 101", date: "2024-11-17" }, present_count: 19, absent_count: 6 },
+                    "art_class": { session_info: { name: "Art Class", date: "2024-11-16" }, present_count: 22, absent_count: 3 },
+                    "pe_class": { session_info: { name: "PE Class", date: "2024-11-15" }, present_count: 25, absent_count: 0 }
+                }
+            };
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard loading...');
+            if (typeof Chart === 'undefined') {
+                showError('Chart.js library failed to load. Please check your internet connection.');
+                return;
+            }
+            updateDashboard();
+        });
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            console.error('Dashboard Error:', message);
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        async function updateDashboard() {
+            try {
+                hideError();
+                console.log('Fetching dashboard data...');
+                
+                try {
+                    // Try to fetch real data first
+                    const response = await fetch('/dashboard_data/');
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    dashboardData = await response.json();
+                    console.log('Real data received:', dashboardData);
+                    
+                    if (dashboardData.error) {
+                        throw new Error(dashboardData.error);
+                    }
+                } catch (fetchError) {
+                    // If API fails, use sample data
+                    console.log('API not available, using sample data:', fetchError.message);
+                    dashboardData = generateSampleData();
+                }
+
+                updateStats();
+                updateCharts();
+                updateTables();
+                populateControls();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Failed to load data: ' + error.message);
+                // Load sample data as fallback
+                dashboardData = generateSampleData();
+                updateStats();
+                updateCharts();
+                updateTables();
+            }
+        }
+
+        function updateStats() {
+            if (!dashboardData) return;
+
+            // Update basic stats
+            document.getElementById('totalStudents').textContent = dashboardData.total_students || 0;
+            document.getElementById('totalSessions').textContent = dashboardData.total_sessions || 0;
+            document.getElementById('totalRecords').textContent = 
+                dashboardData.all_attendance_records ? dashboardData.all_attendance_records.length : 0;
+            
+            // Calculate average attendance
+            let avgAttendance = 0;
+            if (dashboardData.student_statistics && Object.keys(dashboardData.student_statistics).length > 0) {
+                const stats = Object.values(dashboardData.student_statistics);
+                const total = stats.reduce((sum, student) => sum + (student.attendance_percentage || 0), 0);
+                avgAttendance = Math.round(total / stats.length);
+            }
+            document.getElementById('avgAttendance').textContent = avgAttendance + '%';
+        }
+
+        function updateCharts() {
+            if (!dashboardData) return;
+            
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js is not loaded');
+                return;
+            }
+            
+            createDailyChart();
+            createStudentChart();
+            createLateChart();
+            createHeatmapChart();
+        }
+
+        function createDailyChart() {
+            const ctx = document.getElementById('dailyChart');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            if (charts.daily) {
+                charts.daily.destroy();
+            }
+
+            // Group attendance by date
+            const attendanceByDate = {};
+            if (dashboardData.all_attendance_records) {
+                dashboardData.all_attendance_records.forEach(record => {
+                    const date = record.date;
+                    if (!attendanceByDate[date]) {
+                        attendanceByDate[date] = 0;
+                    }
+                    attendanceByDate[date]++;
+                });
+            }
+
+            // Get last 14 days and ensure we have data points
+            const dates = Object.keys(attendanceByDate).sort().slice(-14);
+            let counts = dates.map(date => attendanceByDate[date] || 0);
+
+            // If we don't have enough data points, pad with recent dates
+            if (dates.length < 7) {
+                const today = new Date();
+                const paddedData = [];
+                const paddedLabels = [];
+                
+                for (let i = 13; i >= 0; i--) {
+                    const date = new Date(today);
+                    date.setDate(date.getDate() - i);
+                    const dateStr = date.toISOString().split('T')[0];
+                    
+                    paddedLabels.push(dateStr);
+                    paddedData.push(attendanceByDate[dateStr] || 0);
+                }
+                
+                dates.length = 0;
+                dates.push(...paddedLabels);
+                counts = paddedData;
+            }
+
+            charts.daily = new Chart(context, {
+                type: 'line',
+                data: {
+                    labels: dates.map(date => {
+                        const d = new Date(date);
+                        return (d.getMonth() + 1) + '/' + d.getDate();
+                    }),
+                    datasets: [{
+                        label: 'Daily Attendance',
+                        data: counts,
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgb(59, 130, 246)',
+                        pointBorderColor: '#0b0e13',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            grid: {
+                                color: '#374151'
+                            },
+                            ticks: {
+                                color: '#9ca3af'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#9ca3af'
+                            }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            hoverRadius: 10
+                        }
+                    }
+                }
+            });
+        }
+
+        function createLateChart() {
+            const ctx = document.getElementById('lateChart');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            if (charts.late) {
+                charts.late.destroy();
+            }
+
+            let onTime = 0;
+            let late = 0;
+
+            if (dashboardData.all_attendance_records) {
+                dashboardData.all_attendance_records.forEach(record => {
+                    if (record.is_late) {
+                        late++;
+                    } else {
+                        onTime++;
+                    }
+                });
+            }
+
+            charts.late = new Chart(context, {
+                type: 'doughnut',
+                data: {
+                    labels: ['On Time', 'Late'],
+                    datasets: [{
+                        data: [onTime, late],
+                        backgroundColor: [
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(239, 68, 68, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(34, 197, 94)',
+                            'rgb(239, 68, 68)'
+                        ],
+                        borderWidth: 2,
+                        cutout: '60%'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true,
+                                color: '#e5e7eb'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createHeatmapChart() {
+            const container = document.getElementById('heatmapContainer');
+            if (!container) return;
+            
+            // Clear previous content
+            container.innerHTML = '';
+            
+            // Create heatmap data
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+            
+            // Generate attendance data for each day/week combination
+            const heatmapData = [];
+            for (let week = 0; week < 4; week++) {
+                for (let day = 0; day < 7; day++) {
+                    const attendance = Math.floor(Math.random() * 30) + 10; // 10-40 attendance
+                    heatmapData.push({
+                        week,
+                        day,
+                        value: attendance,
+                        percentage: Math.min(attendance / 40 * 100, 100)
+                    });
+                }
+            }
+
+            // Create heatmap cells
+            const cellWidth = 35;
+            const cellHeight = 35;
+            const padding = 2;
+            
+            // Add day labels
+            days.forEach((day, i) => {
+                const label = document.createElement('div');
+                label.className = 'heatmap-labels';
+                label.textContent = day;
+                label.style.left = `${60 + i * (cellWidth + padding)}px`;
+                label.style.top = '5px';
+                container.appendChild(label);
+            });
+
+            // Add week labels
+            weeks.forEach((week, i) => {
+                const label = document.createElement('div');
+                label.className = 'heatmap-labels';
+                label.textContent = week;
+                label.style.left = '5px';
+                label.style.top = `${35 + i * (cellHeight + padding)}px`;
+                container.appendChild(label);
+            });
+
+            // Create heatmap cells
+            heatmapData.forEach(data => {
+                const cell = document.createElement('div');
+                cell.className = 'heatmap-cell';
+                
+                const x = 60 + data.day * (cellWidth + padding);
+                const y = 35 + data.week * (cellHeight + padding);
+                
+                cell.style.left = `${x}px`;
+                cell.style.top = `${y}px`;
+                cell.style.width = `${cellWidth}px`;
+                cell.style.height = `${cellHeight}px`;
+                
+                // Color intensity based on attendance
+                const intensity = data.percentage / 100;
+                const hue = intensity * 120; // Green to red spectrum
+                cell.style.backgroundColor = `hsla(${hue}, 70%, 50%, ${0.3 + intensity * 0.7})`;
+                
+                cell.textContent = data.value;
+                cell.title = `${days[data.day]} ${weeks[data.week]}: ${data.value} attendees`;
+                
+                container.appendChild(cell);
+            });
+        }
+
+        function createStudentChart() {
+            const ctx = document.getElementById('studentChart');
+            if (!ctx) return;
+            
+            const context = ctx.getContext('2d');
+            
+            if (charts.student) {
+                charts.student.destroy();
+            }
+
+            if (!dashboardData.student_statistics) {
+                return;
+            }
+
+            const students = Object.entries(dashboardData.student_statistics).slice(0, 10);
+            const names = students.map(([name]) => name.length > 15 ? name.substring(0, 12) + '...' : name);
+            const percentages = students.map(([, stats]) => stats.attendance_percentage || 0);
+
+            charts.student = new Chart(context, {
+                type: 'bar',
+                data: {
+                    labels: names,
+                    datasets: [{
+                        label: 'Attendance %',
+                        data: percentages,
+                        backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                        borderColor: 'rgb(139, 92, 246)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            max: 100,
+                            grid: {
+                                color: '#374151'
+                            },
+                            ticks: {
+                                color: '#9ca3af'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#9ca3af'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateTables() {
+            updateStudentsTable();
+            updateSessionsTable();
+        }
+
+        function updateStudentsTable() {
+            const tbody = document.getElementById('studentsTableBody');
+            
+            if (!dashboardData || !dashboardData.student_statistics) {
+                tbody.innerHTML = '<tr><td colspan="4" class="loading">No data available</td></tr>';
+                return;
+            }
+
+            let html = '';
+            Object.entries(dashboardData.student_statistics).forEach(([name, stats]) => {
+                html += `
+                    <tr>
+                        <td>${name}</td>
+                        <td>${stats.total_sessions_attended || 0}</td>
+                        <td>${stats.times_late || 0}</td>
+                        <td>${stats.attendance_percentage || 0}%</td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html || '<tr><td colspan="4" class="loading">No students found</td></tr>';
+        }
+
+        function updateSessionsTable() {
+            const tbody = document.getElementById('sessionsTableBody');
+            
+            if (!dashboardData || !dashboardData.session_details) {
+                tbody.innerHTML = '<tr><td colspan="5" class="loading">No data available</td></tr>';
+                return;
+            }
+
+            let html = '';
+            const sessions = Object.entries(dashboardData.session_details).slice(0, 10);
+            
+            sessions.forEach(([key, details]) => {
+                const session = details.session_info;
+                const total = details.present_count + details.absent_count;
+                const percentage = total > 0 ? Math.round((details.present_count / total) * 100) : 0;
+
+                html += `
+                    <tr>
+                        <td>${session.name}</td>
+                        <td>${session.date}</td>
+                        <td>${details.present_count}</td>
+                        <td>${details.absent_count}</td>
+                        <td>${percentage}%</td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html || '<tr><td colspan="5" class="loading">No sessions found</td></tr>';
+        }
+
+        function populateControls() {
+            if (!dashboardData) return;
+            
+            // Populate session dropdown - FIXED: Use the correct property
+            const sessionSelect = document.getElementById('sessionSelect');
+            sessionSelect.innerHTML = '<option value="">All Sessions</option>';
+            
+            console.log('Sessions list:', dashboardData.sessions_list); // Debug log
+            
+            if (dashboardData.sessions_list && dashboardData.sessions_list.length > 0) {
+                dashboardData.sessions_list.forEach(session => {
+                    const option = document.createElement('option');
+                    option.value = session;
+                    option.textContent = session;
+                    sessionSelect.appendChild(option);
+                });
+            } else {
+                console.warn('No sessions found in sessions_list');
+            }
+            
+            // Set default date to today
+            const dateSelect = document.getElementById('dateSelect');
+            if (!dateSelect.value) {
+                const today = new Date().toISOString().split('T')[0];
+                dateSelect.value = today;
+            }
+        }
+
+        function updateSessionData() {
+            const selectedSession = document.getElementById('sessionSelect').value;
+            const selectedDate = document.getElementById('dateSelect').value;
+            
+            console.log('Selected session:', selectedSession, 'Selected date:', selectedDate);
+            
+            if (!selectedSession || !selectedDate) {
+                document.getElementById('sessionDetailsCard').style.display = 'none';
+                return;
+            }
+            
+            // Filter attendance records for the selected session and date
+            const filteredRecords = dashboardData.all_attendance_records.filter(record => {
+                const sessionMatch = record.session__name === selectedSession;
+                const dateMatch = record.date === selectedDate;
+                return sessionMatch && dateMatch;
+            });
+            
+            console.log('Filtered records:', filteredRecords);
+            
+            // Get all students and determine who was present/absent
+            const allStudents = dashboardData.students_list || [];
+            const presentStudents = filteredRecords.map(record => ({
+                name: record.student__name,
+                isLate: record.is_late,
+                time: record.time
+            }));
+            
+            const presentStudentNames = presentStudents.map(s => s.name);
+            const absentStudents = allStudents.filter(student => 
+                !presentStudentNames.includes(student)
+            );
+            
+            // Calculate statistics
+            const presentCount = presentStudents.length;
+            const absentCount = absentStudents.length;
+            const totalStudents = presentCount + absentCount;
+            const attendancePercentage = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+            
+            // Update the session details card
+            document.getElementById('sessionTitle').textContent = `📋 ${selectedSession} - ${selectedDate}`;
+            document.getElementById('sessionPresent').textContent = presentCount;
+            document.getElementById('sessionAbsent').textContent = absentCount;
+            document.getElementById('sessionPercentage').textContent = attendancePercentage + '%';
+            
+            // Update present students list
+            const presentList = document.getElementById('presentStudentsList');
+            if (presentStudents.length > 0) {
+                presentList.innerHTML = presentStudents.map(student => `
+                    <div class="student-item present-student">
+                        <span>✅ ${student.name}</span>
+                        ${student.isLate ? '<span class="late-badge">LATE</span>' : ''}
+                        <span style="margin-left: auto; font-size: 0.8rem; opacity: 0.7;">${student.time}</span>
+                    </div>
+                `).join('');
+            } else {
+                presentList.innerHTML = '<div class="student-item" style="opacity: 0.6;">No students present</div>';
+            }
+            
+            // Update absent students list
+            const absentList = document.getElementById('absentStudentsList');
+            if (absentStudents.length > 0) {
+                absentList.innerHTML = absentStudents.map(student => `
+                    <div class="student-item absent-student">
+                        <span>❌ ${student}</span>
+                    </div>
+                `).join('');
+            } else {
+                absentList.innerHTML = '<div class="student-item" style="opacity: 0.6;">All students present! 🎉</div>';
+            }
+            
+            // Show the session details card
+            document.getElementById('sessionDetailsCard').style.display = 'block';
+            
+            // Update charts with filtered data
+            updateChartsWithFilter(selectedSession, selectedDate);
+        }
+
+        function updateChartsWithFilter(sessionName, date) {
+            // Update the daily chart to highlight the selected date
+            createDailyChart();
+            
+            // Update other charts as needed based on the filter
+            createStudentChart();
+            createLateChart();
+        }
+    </script>
+</body>
+</html>

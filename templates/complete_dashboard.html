@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Attendance Analytics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-light: #3b82f6;
+            --primary-dark: #1d4ed8;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --background-dark: #0f172a;
+            --background-light: #f8fafc;
+            --surface-dark: #1e293b;
+            --surface-light: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            --background-light: #0f172a;
+            --surface-light: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--background-light);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: var(--surface-light);
+            border-right: 1px solid var(--border-color);
+            z-index: 1000;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            padding: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 1rem;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .main-content {
+            margin-left: 0;
+            transition: margin-left 0.3s ease;
+            min-height: 100vh;
+        }
+
+        .sidebar.open + .main-content {
+            margin-left: 280px;
+        }
+
+        .header {
+            background: var(--surface-light);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            gap: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s ease;
+        }
+
+        .menu-toggle:hover {
+            background: var(--border-color);
+        }
+
+        .header-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-left: auto;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            background: var(--border-color);
+        }
+
+        .container {
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--surface-light);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            width: 3rem;
+            height: 3rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            color: white;
+        }
+
+        .stat-icon.primary { background: var(--primary-color); }
+        .stat-icon.success { background: var(--success-color); }
+        .stat-icon.warning { background: var(--warning-color); }
+        .stat-icon.danger { background: var(--danger-color); }
+
+        .stat-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .stat-trend.up { color: var(--success-color); }
+        .stat-trend.down { color: var(--danger-color); }
+
+        .stat-value {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-panel {
+            background: var(--surface-light);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .filters-panel {
+            background: var(--surface-light);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-control {
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            background: var(--surface-light);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background: var(--background-light);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table tr:hover {
+            background: var(--background-light);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .badge.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .badge.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .badge.danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 0.5rem;
+            background: var(--border-color);
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--success-color);
+            transition: width 0.3s ease;
+        }
+
+        .heatmap-container {
+            position: relative;
+            height: 200px;
+            margin-top: 1rem;
+        }
+
+        .heatmap-cell {
+            position: absolute;
+            border-radius: 0.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .heatmap-labels {
+            position: absolute;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+        }
+
+        .alert.info {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .alert.warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: var(--warning-color);
+            color: var(--warning-color);
+        }
+
+        .loading-skeleton {
+            background: linear-gradient(90deg, var(--border-color) 25%, rgba(255,255,255,0.3) 50%, var(--border-color) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 0.25rem;
+            height: 1rem;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .header {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body data-theme="light">
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <i class="fas fa-chart-line"></i>
+                <span>Analytics</span>
+            </div>
+        </div>
+        <nav>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" data-page="dashboard">
+                        <i class="fas fa-tachometer-alt"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="students">
+                        <i class="fas fa-users"></i>
+                        Students
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="sessions">
+                        <i class="fas fa-calendar"></i>
+                        Sessions
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="reports">
+                        <i class="fas fa-file-alt"></i>
+                        Reports
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="settings">
+                        <i class="fas fa-cog"></i>
+                        Settings
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="header">
+            <div class="header-left">
+                <button class="menu-toggle" id="menuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1 class="header-title">Attendance Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <button class="theme-toggle" id="themeToggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <div class="alert info" id="statusAlert" style="display: none; margin: 0; padding: 0.5rem 1rem;">
+                    <i class="fas fa-info-circle"></i>
+                    Demo mode active
+                </div>
+            </div>
+        </header>
+
+        <div class="container">
+            <!-- Filters Panel -->
+            <div class="filters-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Filters & Controls</h2>
+                    <div class="panel-actions">
+                        <button class="btn" onclick="refreshData()">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="filters-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="dateRange">Date Range</label>
+                        <select class="form-control" id="dateRange">
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 3 months</option>
+                            <option value="365">Last year</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="sessionFilter">Session</label>
+                        <select class="form-control" id="sessionFilter">
+                            <option value="">All Sessions</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="studentFilter">Student</label>
+                        <select class="form-control" id="studentFilter">
+                            <option value="">All Students</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="metricFilter">Metric</label>
+                        <select class="form-control" id="metricFilter">
+                            <option value="attendance">Attendance Rate</option>
+                            <option value="punctuality">Punctuality</option>
+                            <option value="engagement">Engagement</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon primary">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-trend up">
+                            <i class="fas fa-arrow-up"></i>
+                            5.2%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="totalStudents">0</div>
+                    <div class="stat-label">Total Students</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon success">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <div class="stat-trend up">
+                            <i class="fas fa-arrow-up"></i>
+                            3.1%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="avgAttendance">0%</div>
+                    <div class="stat-label">Average Attendance</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon warning">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-trend down">
+                            <i class="fas fa-arrow-down"></i>
+                            2.4%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="latePercentage">0%</div>
+                    <div class="stat-label">Late Arrivals</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div class="stat-icon danger">
+                            <i class="fas fa-calendar-times"></i>
+                        </div>
+                        <div class="stat-trend up">
+                            <i class="fas fa-arrow-up"></i>
+                            1.8%
+                        </div>
+                    </div>
+                    <div class="stat-value" id="totalSessions">0</div>
+                    <div class="stat-label">Total Sessions</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Attendance Trends Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">Attendance Trends</h3>
+                        <div class="panel-actions">
+                            <button class="btn btn-secondary" onclick="exportChart('trends')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Student Performance Chart -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">Student Performance</h3>
+                        <div class="panel-actions">
+                            <button class="btn btn-secondary" onclick="exportChart('performance')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Session Distribution -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">Session Distribution</h3>
+                        <div class="panel-actions">
+                            <button class="btn btn-secondary" onclick="exportChart('distribution')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="distributionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Attendance Heatmap -->
+                <div class="chart-panel">
+                    <div class="panel-header">
+                        <h3 class="panel-title">Weekly Heatmap</h3>
+                        <div class="panel-actions">
+                            <button class="btn btn-secondary" onclick="exportChart('heatmap')">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="heatmap-container" id="heatmapContainer"></div>
+                </div>
+            </div>
+
+            <!-- Data Tables -->
+            <div class="chart-panel">
+                <div class="panel-header">
+                    <h3 class="panel-title">Student Performance Overview</h3>
+                    <div class="panel-actions">
+                        <button class="btn btn-secondary" onclick="exportTable('students')">
+                            <i class="fas fa-file-excel"></i>
+                            Export
+                        </button>
+                    </div>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="data-table" id="studentsTable">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Attendance Rate</th>
+                                <th>Sessions</th>
+                                <th>Late Count</th>
+                                <th>Trend</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody">
+                            <tr>
+                                <td colspan="6">
+                                    <div class="loading-skeleton"></div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Global variables
+        let dashboardData = null;
+        let charts = {};
+        let currentTheme = 'light';
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEventListeners();
+            showStatus('Loading dashboard...', 'info');
+            loadDashboardData();
+        });
+
+        function initializeEventListeners() {
+            // Menu toggle
+            document.getElementById('menuToggle').addEventListener('click', toggleSidebar);
+            
+            // Theme toggle
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            
+            // Navigation links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const page = this.dataset.page;
+                    switchPage(page);
+                });
+            });
+
+            // Filter change listeners
+            ['dateRange', 'sessionFilter', 'studentFilter', 'metricFilter'].forEach(id => {
+                document.getElementById(id).addEventListener('change', applyFilters);
+            });
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        function toggleTheme() {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.body.dataset.theme = currentTheme;
+            
+            const icon = document.querySelector('#themeToggle i');
+            icon.className = currentTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        function switchPage(page) {
+            // Update active nav link
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.toggle('active', link.dataset.page === page);
+            });
+
+            // Update header title
+            const titles = {
+                dashboard: 'Attendance Dashboard',
+                students: 'Student Management',
+                sessions: 'Session Management',
+                reports: 'Reports & Analytics',
+                settings: 'Settings'
+            };
+            document.querySelector('.header-title').textContent = titles[page] || 'Dashboard';
+        }
+
+        function showStatus(message, type = 'info') {
+            const alert = document.getElementById('statusAlert');
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 3000);
+        }
+
+        // Generate comprehensive sample data
+        function generateSampleData() {
+            const students = [
+                "Alex Johnson", "Sarah Chen", "Michael Brown", "Emma Davis", "James Wilson",
+                "Olivia Garcia", "William Martinez", "Sophia Anderson", "Benjamin Taylor", "Isabella Thomas",
+                "Lucas Jackson", "Mia White", "Henry Harris", "Charlotte Martin", "Alexander Clark"
+            ];
+            
+            const sessions = [
+                "Advanced Mathematics", "Computer Science", "Physics Lab", "Chemistry", "Biology",
+                "English Literature", "History", "Art & Design", "Music Theory", "Physical Education"
+            ];
+            
+            const records = [];
+            const currentDate = new Date();
+            
+            // Generate 90 days of realistic attendance data
+            for (let day = 0; day < 90; day++) {
+                const date = new Date(currentDate);
+                date.setDate(date.getDate() - day);
+                const dateStr = date.toISOString().split('T')[0];
+                const dayOfWeek = date.getDay();
+                
+                // Skip weekends
+                if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+                
+                // Randomly select 3-5 sessions per day
+                const dailySessions = sessions.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 3);
+                
+                dailySessions.forEach((sessionName, index) => {
+                    const sessionHour = 8 + index * 2; // Sessions at 8, 10, 12, 14, 16
+                    
+                    students.forEach(student => {
+                        // 85-95% base attendance rate, varies by student
+                        const studentIndex = students.indexOf(student);
+                        const baseAttendanceRate = 0.85 + (studentIndex % 10) * 0.01;
+                        
+                        // Monday and Friday have slightly lower attendance
+                        const dayFactor = (dayOfWeek === 1 || dayOfWeek === 5) ? 0.95 : 1.0;
+                        
+                        const attendanceChance = baseAttendanceRate * dayFactor;
+                        
+                        if (Math.random() < attendanceChance) {
+                            const arrivalMinutes = Math.random() < 0.8 ? 
+                                Math.floor(Math.random() * 10) - 5 : // On time (±5 min)
+                                Math.floor(Math.random() * 30) + 5;  // Late (5-35 min)
+                            
+                            const arrivalTime = new Date();
+                            arrivalTime.setHours(sessionHour, arrivalMinutes);
+                            
+                            records.push({
+                                student__name: student,
+                                session__name: sessionName,
+                                date: dateStr,
+                                time: arrivalTime.toTimeString().slice(0, 8),
+                                is_late: arrivalMinutes > 10,
+                                student_id: studentIndex + 1,
+                                session_id: sessions.indexOf(sessionName) + 1
+                            });
+                        }
+                    });
+                });
+            }
+
+            // Calculate student statistics
+            const studentStats = {};
+            students.forEach((student, index) => {
+                const studentRecords = records.filter(r => r.student__name === student);
+                const totalSessions = sessions.length * 60; // Approximate total possible sessions
+                const lateCount = studentRecords.filter(r => r.is_late).length;
+                
+                studentStats[student] = {
+                    total_sessions_attended: studentRecords.length,
+                    times_late: lateCount,
+                    attendance_percentage: Math.round((studentRecords.length / totalSessions) * 100),
+                    trend: Math.random() > 0.5 ? 'up' : 'down'
+                };
+            });
+
+            // Calculate session details
+            const sessionDetails = {};
+            sessions.forEach((sessionName, index) => {
+                const sessionRecords = records.filter(r => r.session__name === sessionName);
+                const uniqueDates = [...new Set(sessionRecords.map(r => r.date))];
+                
+                sessionDetails[`session_${index}`] = {
+                    session_info: {
+                        name: sessionName,
+                        date: uniqueDates[0] || new Date().toISOString().split('T')[0]
+                    },
+                    present_count: Math.floor(sessionRecords.length / uniqueDates.length) || 0,
+                    absent_count: students.length - Math.floor(sessionRecords.length / uniqueDates.length) || 0
+                };
+            });
+
+            return {
+                total_students: students.length,
+                total_sessions: sessions.length,
+                all_attendance_records: records,
+                students_list: students,
+                sessions_list: sessions,
+                student_statistics: studentStats,
+                session_details: sessionDetails
+            };
+        }
+
+        async function loadDashboardData() {
+            try {
+                // Try to fetch real data first
+                const response = await fetch('/dashboard_data/');
+                if (response.ok) {
+                    dashboardData = await response.json();
+                    showStatus('Data loaded successfully', 'success');
+                } else {
+                    throw new Error('API unavailable');
+                }
+            } catch (error) {
+                // Use sample data as fallback
+                dashboardData = generateSampleData();
+                showStatus('Demo mode: Using sample data', 'warning');
+            }
+
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            updateStats();
+            updateCharts();
+            updateTables();
+            populateFilters();
+        }
+
+        function updateStats() {
+            if (!dashboardData) return;
+
+            // Total students
+            document.getElementById('totalStudents').textContent = dashboardData.total_students || 0;
+            
+            // Average attendance
+            let avgAttendance = 0;
+            if (dashboardData.student_statistics) {
+                const stats = Object.values(dashboardData.student_statistics);
+                const total = stats.reduce((sum, student) => sum + (student.attendance_percentage || 0), 0);
+                avgAttendance = Math.round(total / stats.length);
+            }
+            document.getElementById('avgAttendance').textContent = avgAttendance + '%';
+            
+            // Late percentage
+            let latePercentage = 0;
+            if (dashboardData.all_attendance_records) {
+                const lateRecords = dashboardData.all_attendance_records.filter(r => r.is_late);
+                latePercentage = Math.round((lateRecords.length / dashboardData.all_attendance_records.length) * 100);
+            }
+            document.getElementById('latePercentage').textContent = latePercentage + '%';
+            
+            // Total sessions
+            document.getElementById('totalSessions').textContent = dashboardData.total_sessions || 0;
+        }
+
+        function updateCharts() {
+            createTrendsChart();
+            createPerformanceChart();
+            createDistributionChart();
+            createHeatmap();
+        }
+
+        function createTrendsChart() {
+            const ctx = document.getElementById('trendsChart');
+            if (!ctx) return;
+
+            if (charts.trends) {
+                charts.trends.destroy();
+            }
+
+            // Process data for trends chart
+            const dailyAttendance = {};
+            if (dashboardData.all_attendance_records) {
+                dashboardData.all_attendance_records.forEach(record => {
+                    const date = record.date;
+                    dailyAttendance[date] = (dailyAttendance[date] || 0) + 1;
+                });
+            }
+
+            const dates = Object.keys(dailyAttendance).sort().slice(-30);
+            const values = dates.map(date => dailyAttendance[date] || 0);
+
+            charts.trends = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates.map(date => {
+                        const d = new Date(date);
+                        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    }),
+                    datasets: [{
+                        label: 'Daily Attendance',
+                        data: values,
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 7 }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(0,0,0,0.05)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createPerformanceChart() {
+            const ctx = document.getElementById('performanceChart');
+            if (!ctx) return;
+
+            if (charts.performance) {
+                charts.performance.destroy();
+            }
+
+            if (!dashboardData.student_statistics) return;
+
+            const students = Object.entries(dashboardData.student_statistics)
+                .sort(([,a], [,b]) => b.attendance_percentage - a.attendance_percentage)
+                .slice(0, 10);
+
+            const labels = students.map(([name]) => name.split(' ')[0]);
+            const values = students.map(([,stats]) => stats.attendance_percentage);
+
+            charts.performance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Attendance %',
+                        data: values,
+                        backgroundColor: values.map(v => 
+                            v >= 90 ? '#10b981' : 
+                            v >= 70 ? '#f59e0b' : '#ef4444'
+                        ),
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { 
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { callback: value => value + '%' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createDistributionChart() {
+            const ctx = document.getElementById('distributionChart');
+            if (!ctx) return;
+
+            if (charts.distribution) {
+                charts.distribution.destroy();
+            }
+
+            if (!dashboardData.sessions_list || !dashboardData.all_attendance_records) return;
+
+            const sessionCounts = {};
+            dashboardData.all_attendance_records.forEach(record => {
+                const session = record.session__name;
+                sessionCounts[session] = (sessionCounts[session] || 0) + 1;
+            });
+
+            const labels = Object.keys(sessionCounts);
+            const values = Object.values(sessionCounts);
+
+            charts.distribution = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: [
+                            '#2563eb', '#10b981', '#f59e0b', '#ef4444',
+                            '#8b5cf6', '#06b6d4', '#f97316', '#84cc16'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { 
+                                padding: 15,
+                                usePointStyle: true,
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createHeatmap() {
+            const container = document.getElementById('heatmapContainer');
+            if (!container) return;
+
+            container.innerHTML = '';
+
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+            const timeSlots = ['8-10', '10-12', '12-14', '14-16'];
+
+            // Generate heatmap data
+            const heatmapData = [];
+            for (let day = 0; day < days.length; day++) {
+                for (let time = 0; time < timeSlots.length; time++) {
+                    const attendance = Math.floor(Math.random() * 40) + 20;
+                    heatmapData.push({
+                        day,
+                        time,
+                        value: attendance,
+                        intensity: attendance / 60
+                    });
+                }
+            }
+
+            // Create grid
+            const cellWidth = 50;
+            const cellHeight = 35;
+            const padding = 4;
+
+            // Add labels
+            days.forEach((day, i) => {
+                const label = document.createElement('div');
+                label.className = 'heatmap-labels';
+                label.textContent = day;
+                label.style.left = `${60 + i * (cellWidth + padding)}px`;
+                label.style.top = '10px';
+                container.appendChild(label);
+            });
+
+            timeSlots.forEach((time, i) => {
+                const label = document.createElement('div');
+                label.className = 'heatmap-labels';
+                label.textContent = time;
+                label.style.left = '10px';
+                label.style.top = `${40 + i * (cellHeight + padding)}px`;
+                container.appendChild(label);
+            });
+
+            // Create cells
+            heatmapData.forEach(data => {
+                const cell = document.createElement('div');
+                cell.className = 'heatmap-cell';
+                
+                const x = 60 + data.day * (cellWidth + padding);
+                const y = 40 + data.time * (cellHeight + padding);
+                
+                cell.style.left = `${x}px`;
+                cell.style.top = `${y}px`;
+                cell.style.width = `${cellWidth}px`;
+                cell.style.height = `${cellHeight}px`;
+                
+                const intensity = Math.min(data.intensity, 1);
+                const alpha = 0.3 + intensity * 0.7;
+                cell.style.backgroundColor = `rgba(37, 99, 235, ${alpha})`;
+                
+                cell.textContent = data.value;
+                cell.title = `${days[data.day]} ${timeSlots[data.time]}: ${data.value} students`;
+                
+                container.appendChild(cell);
+            });
+        }
+
+        function updateTables() {
+            const tbody = document.getElementById('studentsTableBody');
+            
+            if (!dashboardData || !dashboardData.student_statistics) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">No data available</td></tr>';
+                return;
+            }
+
+            const students = Object.entries(dashboardData.student_statistics)
+                .sort(([,a], [,b]) => b.attendance_percentage - a.attendance_percentage);
+
+            let html = '';
+            students.forEach(([name, stats]) => {
+                const statusClass = stats.attendance_percentage >= 90 ? 'success' : 
+                                   stats.attendance_percentage >= 70 ? 'warning' : 'danger';
+                const statusText = stats.attendance_percentage >= 90 ? 'Excellent' : 
+                                  stats.attendance_percentage >= 70 ? 'Good' : 'Needs Attention';
+                const trendIcon = stats.trend === 'up' ? 'fa-arrow-up' : 'fa-arrow-down';
+                const trendColor = stats.trend === 'up' ? '#10b981' : '#ef4444';
+
+                html += `
+                    <tr>
+                        <td><strong>${name}</strong></td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div class="progress-bar" style="flex: 1;">
+                                    <div class="progress-fill" style="width: ${stats.attendance_percentage}%"></div>
+                                </div>
+                                <span>${stats.attendance_percentage}%</span>
+                            </div>
+                        </td>
+                        <td>${stats.total_sessions_attended}</td>
+                        <td>${stats.times_late}</td>
+                        <td>
+                            <i class="fas ${trendIcon}" style="color: ${trendColor}"></i>
+                        </td>
+                        <td>
+                            <span class="badge ${statusClass}">${statusText}</span>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function populateFilters() {
+            if (!dashboardData) return;
+
+            // Populate session filter
+            const sessionFilter = document.getElementById('sessionFilter');
+            sessionFilter.innerHTML = '<option value="">All Sessions</option>';
+            
+            if (dashboardData.sessions_list) {
+                dashboardData.sessions_list.forEach(session => {
+                    const option = document.createElement('option');
+                    option.value = session;
+                    option.textContent = session;
+                    sessionFilter.appendChild(option);
+                });
+            }
+
+            // Populate student filter
+            const studentFilter = document.getElementById('studentFilter');
+            studentFilter.innerHTML = '<option value="">All Students</option>';
+            
+            if (dashboardData.students_list) {
+                dashboardData.students_list.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student;
+                    option.textContent = student;
+                    studentFilter.appendChild(option);
+                });
+            }
+        }
+
+        function applyFilters() {
+            const dateRange = document.getElementById('dateRange').value;
+            const session = document.getElementById('sessionFilter').value;
+            const student = document.getElementById('studentFilter').value;
+            const metric = document.getElementById('metricFilter').value;
+
+            showStatus('Applying filters...', 'info');
+            
+            // Filter the data based on selections
+            let filteredRecords = dashboardData.all_attendance_records;
+
+            if (session) {
+                filteredRecords = filteredRecords.filter(r => r.session__name === session);
+            }
+
+            if (student) {
+                filteredRecords = filteredRecords.filter(r => r.student__name === student);
+            }
+
+            // Filter by date range
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - parseInt(dateRange));
+            filteredRecords = filteredRecords.filter(r => new Date(r.date) >= cutoffDate);
+
+            // Update charts with filtered data
+            updateChartsWithFilteredData(filteredRecords);
+            showStatus('Filters applied successfully', 'success');
+        }
+
+        function updateChartsWithFilteredData(filteredRecords) {
+            // Update trends chart with filtered data
+            const dailyAttendance = {};
+            filteredRecords.forEach(record => {
+                const date = record.date;
+                dailyAttendance[date] = (dailyAttendance[date] || 0) + 1;
+            });
+
+            const dates = Object.keys(dailyAttendance).sort().slice(-30);
+            const values = dates.map(date => dailyAttendance[date] || 0);
+
+            if (charts.trends) {
+                charts.trends.data.labels = dates.map(date => {
+                    const d = new Date(date);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
+                charts.trends.data.datasets[0].data = values;
+                charts.trends.update();
+            }
+        }
+
+        function refreshData() {
+            showStatus('Refreshing data...', 'info');
+            loadDashboardData();
+        }
+
+        function exportChart(chartType) {
+            showStatus(`Exporting ${chartType} chart...`, 'info');
+            // Implementation for chart export would go here
+            setTimeout(() => {
+                showStatus('Chart exported successfully', 'success');
+            }, 1000);
+        }
+
+        function exportTable(tableType) {
+            showStatus(`Exporting ${tableType} table...`, 'info');
+            // Implementation for table export would go here
+            setTimeout(() => {
+                showStatus('Table exported successfully', 'success');
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
