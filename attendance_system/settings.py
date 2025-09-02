@@ -26,6 +26,29 @@ SECRET_KEY = 'django-insecure-6hl+$od6d=rkb#neuhyg4r1v48(eoo3#nu)@gzi9%jby5bs8jx
 # OpenAI API Key
 OPENAI_API_KEY = "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"
 
+
+# Custom User Model
+AUTH_USER_MODEL = 'faceapp.Teacher' 
+
+# Login URLs
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/dashboard/'
+LOGOUT_REDIRECT_URL = '/login/'
+
+# Authentication Backends (optional - for email login support)
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    # Add custom backend here if you want email login
+]
+
+
+
+# Session Settings
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_SAVE_EVERY_REQUEST = True
+
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -88,12 +111,29 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
+# AUTH_PASSWORD_VALIDATORS = [
+#     {
+#         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+#     },
+#     {
+#         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+#     },
+#     {
+#         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+#     },
+#     {
+#         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+#     },
+# ]
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',

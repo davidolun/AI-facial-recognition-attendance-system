@@ -18,10 +18,18 @@ import json
 from .models import Student, AttendanceRecord, AttendanceSession, AIQuery
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.shortcuts import redirect
+from .models import Teacher, Class
+from django.db import transaction
+
 
 # Initialize OpenAI client with new API
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+@login_required
 def home(request):
     return render(request, 'home.html')
 
@@ -90,6 +98,7 @@ def take_attendance(request):
             return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse({"message": "Use POST request."})
 
+@login_required
 @csrf_exempt
 def add_student(request):
     if request.method == "POST":
@@ -100,6 +109,7 @@ def add_student(request):
             student_id = data.get("student_id", "")
             email = data.get("email", "")
             phone = data.get("phone", "")
+            class_ids = data.get("class_ids", [])  # NEW: Allow multiple class assignment
 
             if not student_name:
                 return JsonResponse({"error": "No name provided"}, status=400)
@@ -130,6 +140,7 @@ def add_student(request):
             with open(save_path, "wb") as f:
                 f.write(img_bytes)
 
+            # Create student
             student = Student.objects.create(
                 name=student_name,
                 student_id=student_id if student_id else None,
@@ -137,6 +148,15 @@ def add_student(request):
                 phone=phone if phone else None,
                 image_path=save_path
             )
+            
+            # Assign to classes if provided
+            if class_ids:
+                # Verify all classes belong to the logged-in teacher
+                teacher_classes = Class.objects.filter(id__in=class_ids, teacher=request.user)
+                if teacher_classes.count() != len(class_ids):
+                    return JsonResponse({"error": "Some classes not found or you do not have permission"}, status=400)
+                
+                student.classes.set(teacher_classes)
 
             return JsonResponse({
                 "message": f"Student {student_name} added successfully!",
@@ -148,6 +168,11 @@ def add_student(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return render(request, "add_student.html")
+
+@login_required
+def class_management(request):
+    """Render the class management page"""
+    return render(request, 'class_management.html')
 
 @csrf_exempt
 def take_attendance_enhanced(request):
@@ -261,19 +286,25 @@ def detect_faces(request):
             return JsonResponse({"error": str(e), "faces": []})
     return JsonResponse({"faces": []})
 
+@login_required
 def view_records(request):
     return render(request, 'ai_assistant.html')
 
-def get_complete_attendance_data():
+def get_complete_attendance_data(teacher=None):
     """Get COMPLETE attendance data for AI with proper absence tracking"""
     
-    # Get all students
-    all_students = list(Student.objects.filter(is_active=True).values('id', 'name', 'student_id', 'email'))
-    
-    # Get all sessions with detailed info
-    all_sessions = list(AttendanceSession.objects.all().order_by('-date', '-start_time').values(
-        'id', 'name', 'date', 'start_time', 'end_time'
-    ))
+    # Filter by teacher if provided (for teacher-specific data)
+    if teacher:
+        all_students = list(Student.objects.filter(is_active=True, classes__teacher=teacher).distinct().values('id', 'name', 'student_id', 'email'))
+        all_sessions = list(AttendanceSession.objects.filter(teacher=teacher).order_by('-date', '-start_time').values(
+            'id', 'name', 'date', 'start_time', 'end_time', 'class_session__name'
+        ))
+    else:
+        # For admins - get all data
+        all_students = list(Student.objects.filter(is_active=True).values('id', 'name', 'student_id', 'email'))
+        all_sessions = list(AttendanceSession.objects.all().order_by('-date', '-start_time').values(
+            'id', 'name', 'date', 'start_time', 'end_time', 'class_session__name'
+        ))
     
     # Convert dates and times to strings for JSON serialization
     for session in all_sessions:
@@ -283,10 +314,16 @@ def get_complete_attendance_data():
             session['end_time'] = session['end_time'].strftime('%H:%M:%S')
     
     # Get ALL attendance records with related data
-    all_records = list(AttendanceRecord.objects.select_related('student', 'session').values(
-        'student__name', 'student_id', 'session__name', 'session_id', 
-        'date', 'time', 'arrival_time', 'is_late', 'timestamp'
-    ))
+    if teacher:
+        all_records = list(AttendanceRecord.objects.filter(session__teacher=teacher).select_related('student', 'session').values(
+            'student__name', 'student_id', 'session__name', 'session_id', 
+            'date', 'time', 'arrival_time', 'is_late', 'timestamp'
+        ))
+    else:
+        all_records = list(AttendanceRecord.objects.select_related('student', 'session').values(
+            'student__name', 'student_id', 'session__name', 'session_id', 
+            'date', 'time', 'arrival_time', 'is_late', 'timestamp'
+        ))
     
     # Convert dates and times to strings
     for record in all_records:
@@ -338,29 +375,37 @@ def get_complete_attendance_data():
 # Store conversation context in memory (in production, use database or cache)
 conversation_contexts = {}
 
-def query_attendance_data_with_context(user_query: str, session_id: str) -> str:
-    """
-    Enhanced AI query with conversation context and complete data access
-    """
-    # Get complete data
-    data = get_complete_attendance_data()
+def query_attendance_data_with_context(user_query: str, session_id: str, teacher=None) -> str:
+    """Enhanced AI query with conversation context and complete data access"""
+    
+    # Get complete data (filtered by teacher if not admin)
+    data = get_complete_attendance_data(teacher)
     
     # Get or initialize conversation context for this session
     if session_id not in conversation_contexts:
         conversation_contexts[session_id] = []
     
     conversation_history = conversation_contexts[session_id]
-    
-    # Add current query to history
     conversation_history.append({"role": "user", "content": user_query})
     
     # Keep only last 10 exchanges to prevent token limit issues
     if len(conversation_history) > 20:
         conversation_history = conversation_history[-20:]
     
-    # Create comprehensive system prompt
+    # Create comprehensive system prompt with teacher context
+    teacher_info = ""
+    if teacher:
+        teacher_info = f"""
+TEACHER CONTEXT:
+You are responding to {teacher.get_full_name()} ({teacher.username}).
+This data is filtered to show only their classes and sessions.
+Department: {teacher.department or 'Not specified'}
+"""
+    
     system_prompt = f"""
 You are an advanced AI assistant for a student attendance tracking system. You have access to COMPLETE attendance data and can maintain conversation context.
+
+{teacher_info}
 
 COMPLETE ATTENDANCE DATABASE:
 {json.dumps(data, indent=2)}
@@ -378,6 +423,7 @@ IMPORTANT INSTRUCTIONS:
 3. Always specify the exact date, session, and numbers in your responses
 4. Maintain conversation context - if someone asks "who was absent" after asking about a specific session, refer to that same session
 5. Be precise with numbers and always show your reasoning
+6. If you're responding to a teacher, remember this data is specific to their classes only
 
 CONVERSATION CONTEXT:
 Remember the conversation history to provide contextual responses. If someone asks a follow-up question without specifying details, use the context from previous messages.
@@ -390,23 +436,17 @@ Total sessions in system: {data['total_sessions']}
     try:
         # Prepare messages for OpenAI
         messages = [{"role": "system", "content": system_prompt}]
-        
-        # Add conversation history (last few exchanges for context)
-        messages.extend(conversation_history[-6:])  # Last 6 messages for context
+        messages.extend(conversation_history[-6:])
         
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.1,  # Lower temperature for more consistent responses
+            temperature=0.1,
             max_tokens=1000
         )
         
         ai_response = response.choices[0].message.content
-        
-        # Add AI response to conversation history
         conversation_history.append({"role": "assistant", "content": ai_response})
-        
-        # Update conversation context
         conversation_contexts[session_id] = conversation_history
         
         # Save query to database
@@ -419,20 +459,21 @@ Total sessions in system: {data['total_sessions']}
         
     except Exception as e:
         return f"Sorry, I encountered an error: {str(e)}"
-
+@login_required
 @csrf_exempt
 def ai_assistant(request):
     if request.method == "POST":
         try:
             data = json.loads(request.body)
             user_query = data.get("query", "").strip()
-            session_id = data.get("session_id", "default")  # Use session ID for context
+            session_id = data.get("session_id", "default")
             
             if not user_query:
                 return JsonResponse({"error": "No query provided"}, status=400)
             
-            # Get AI response with context
-            ai_response = query_attendance_data_with_context(user_query, session_id)
+            # Pass teacher context for data filtering (unless admin)
+            teacher = None if request.user.is_admin else request.user
+            ai_response = query_attendance_data_with_context(user_query, session_id, teacher)
             
             return JsonResponse({
                 "query": user_query,
@@ -445,15 +486,19 @@ def ai_assistant(request):
     
     return render(request, 'ai_assistant.html')
 
+
+@login_required
 @csrf_exempt
 def get_sessions(request):
-    """Get available sessions for today or upcoming days"""
+    """Get sessions for the logged-in teacher only"""
     if request.method == "GET":
         try:
             today = date.today()
             upcoming_date = today + timedelta(days=7)
             
+            # Filter sessions by logged-in teacher
             sessions = AttendanceSession.objects.filter(
+                teacher=request.user,  # NEW: Filter by teacher
                 date__gte=today,
                 date__lte=upcoming_date
             ).order_by('date', 'start_time')
@@ -461,11 +506,13 @@ def get_sessions(request):
             session_data = []
             for session in sessions:
                 attendance_count = AttendanceRecord.objects.filter(session=session).count()
-                total_students = Student.objects.filter(is_active=True).count()
+                # Only count students from the session's class
+                total_students = session.class_session.students.filter(is_active=True).count()
                 
                 session_data.append({
                     'id': session.id,
                     'name': session.name,
+                    'class_name': session.class_session.name,  # NEW: Include class name
                     'date': session.date.strftime('%Y-%m-%d'),
                     'date_display': session.date.strftime('%B %d, %Y'),
                     'start_time': session.start_time.strftime('%H:%M'),
@@ -487,6 +534,7 @@ def get_sessions(request):
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
+@login_required
 @csrf_exempt
 def take_attendance_with_session(request):
     if request.method == "POST":
@@ -502,9 +550,10 @@ def take_attendance_with_session(request):
                 return JsonResponse({"error": "No session selected"}, status=400)
 
             try:
-                session = AttendanceSession.objects.get(id=session_id)
+                # Ensure session belongs to logged-in teacher
+                session = AttendanceSession.objects.get(id=session_id, teacher=request.user)
             except AttendanceSession.DoesNotExist:
-                return JsonResponse({"error": "Session not found"}, status=400)
+                return JsonResponse({"error": "Session not found or you do not have permission"}, status=400)
 
             img_str = re.sub("^data:image/.+;base64,", "", image_data)
             img_bytes = base64.b64decode(img_str)
@@ -518,7 +567,8 @@ def take_attendance_with_session(request):
 
             faces_for_js = [{"top": f[0], "right": f[1], "bottom": f[2], "left": f[3]} for f in face_locations]
 
-            students = Student.objects.filter(is_active=True)
+            # Only get students from the session's class
+            students = session.class_session.students.filter(is_active=True)
             student_encodings = []
             student_objects = []
 
@@ -568,16 +618,17 @@ def take_attendance_with_session(request):
                         recognized_students.append(f"{student.name} (Already marked at {original_time})")
 
             total_attendance = AttendanceRecord.objects.filter(session=session).count()
-            total_students = Student.objects.filter(is_active=True).count()
+            total_students = session.class_session.students.filter(is_active=True).count()
 
-            message = f"Attendance taken for {session.name}: {', '.join(recognized_students) if recognized_students else 'No match'}"
+            message = f"Attendance taken for {session.name} ({session.class_session.name}): {', '.join(recognized_students) if recognized_students else 'No match'}"
             
             return JsonResponse({
                 "message": message, 
                 "faces": faces_for_js,
                 "attendance_count": total_attendance,
                 "total_students": total_students,
-                "session_name": session.name
+                "session_name": session.name,
+                "class_name": session.class_session.name
             })
 
         except Exception as e:
@@ -585,7 +636,147 @@ def take_attendance_with_session(request):
             
     return JsonResponse({"message": "Use POST request."})
 
-@csrf_exempt 
+# @login_required
+# @csrf_exempt
+# def create_session(request):
+#     if request.method == "POST":
+#         try:
+#             data = json.loads(request.body)
+#             name = data.get("name")
+#             date_str = data.get("date")
+#             start_time_str = data.get("start_time")
+#             end_time_str = data.get("end_time", "")
+#             class_id = data.get("class_id")  # NEW: Require class selection
+            
+#             if not name or not date_str or not start_time_str or not class_id:
+#                 return JsonResponse({"error": "Missing required fields"}, status=400)
+            
+#             # Verify the class belongs to the logged-in teacher
+#             try:
+#                 class_obj = Class.objects.get(id=class_id, teacher=request.user)
+#             except Class.DoesNotExist:
+#                 return JsonResponse({"error": "Class not found or you do not have permission"}, status=404)
+            
+#             session_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+#             start_time = datetime.strptime(start_time_str, "%H:%M").time()
+#             end_time = datetime.strptime(end_time_str, "%H:%M").time() if end_time_str else None
+            
+#             session = AttendanceSession.objects.create(
+#                 name=name,
+#                 date=session_date,
+#                 start_time=start_time,
+#                 end_time=end_time,
+#                 teacher=request.user,  # NEW: Link to logged-in teacher
+#                 class_session=class_obj  # NEW: Link to selected class
+#             )
+            
+#             return JsonResponse({
+#                 "message": f"Session '{name}' created successfully for {class_obj.name}",
+#                 "session_id": session.id
+#             })
+            
+#         except ValueError as e:
+#             return JsonResponse({"error": "Invalid date/time format"}, status=400)
+#         except Exception as e:
+#             return JsonResponse({"error": str(e)}, status=400)
+    
+#     return JsonResponse({"error": "Use POST request"}, status=405)
+
+@login_required
+def get_all_students(request):
+    """Get all students in the system for assignment to classes"""
+    try:
+        # Get all active students
+        all_students = Student.objects.filter(is_active=True).prefetch_related('classes')
+        
+        students_data = []
+        
+        for student in all_students:
+            # Get all classes the student is currently in
+            current_classes = student.classes.filter(is_active=True)
+            
+            # Check if student is already in any of the teacher's classes
+            teacher_classes = current_classes.filter(teacher=request.user)
+            is_in_teacher_classes = teacher_classes.exists()
+            
+            students_data.append({
+                'id': student.id,
+                'name': student.name,
+                'student_id': student.student_id,
+                'email': student.email,
+                'phone': student.phone,
+                'created_at': student.created_at.strftime('%Y-%m-%d'),
+                'current_classes': [
+                    {
+                        'id': cls.id,
+                        'name': cls.name,
+                        'code': cls.code,
+                        'teacher_name': cls.teacher.get_full_name()
+                    }
+                    for cls in current_classes
+                ],
+                'is_in_teacher_classes': is_in_teacher_classes,
+                'teacher_classes': [
+                    {
+                        'id': cls.id,
+                        'name': cls.name,
+                        'code': cls.code
+                    }
+                    for cls in teacher_classes
+                ]
+            })
+        
+        return JsonResponse({
+            'students': students_data,
+            'total_students': len(students_data)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    
+@login_required
+def get_teacher_students(request):
+    """Get all students in the logged-in teacher's classes"""
+    try:
+        # Get all students that are in any of the teacher's classes
+        students = Student.objects.filter(
+            classes__teacher=request.user,
+            is_active=True
+        ).distinct().prefetch_related('classes')
+        
+        students_data = []
+        
+        for student in students:
+            # Get only the classes taught by this teacher
+            student_classes = student.classes.filter(teacher=request.user, is_active=True)
+            
+            students_data.append({
+                'id': student.id,
+                'name': student.name,
+                'student_id': student.student_id,
+                'email': student.email,
+                'phone': student.phone,
+                'created_at': student.created_at.strftime('%Y-%m-%d'),
+                'classes': [
+                    {
+                        'id': cls.id,
+                        'name': cls.name,
+                        'code': cls.code
+                    }
+                    for cls in student_classes
+                ]
+            })
+        
+        return JsonResponse({
+            'students': students_data,
+            'total_students': len(students_data)
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    
+@login_required
+@csrf_exempt
 def create_session(request):
     if request.method == "POST":
         try:
@@ -594,24 +785,45 @@ def create_session(request):
             date_str = data.get("date")
             start_time_str = data.get("start_time")
             end_time_str = data.get("end_time", "")
+            class_id = data.get("class_id")
+            session_type = data.get("session_type", "Regular")  # NEW: Handle session type
             
-            if not name or not date_str or not start_time_str:
+            if not name or not date_str or not start_time_str or not class_id:
                 return JsonResponse({"error": "Missing required fields"}, status=400)
+            
+            # Verify the class belongs to the logged-in teacher
+            try:
+                class_obj = Class.objects.get(id=class_id, teacher=request.user)
+            except Class.DoesNotExist:
+                return JsonResponse({"error": "Class not found or you do not have permission"}, status=404)
             
             session_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             start_time = datetime.strptime(start_time_str, "%H:%M").time()
             end_time = datetime.strptime(end_time_str, "%H:%M").time() if end_time_str else None
             
+            # Create enhanced session name with type if not Regular
+            enhanced_name = f"{name} ({session_type})" if session_type != "Regular" else name
+            
             session = AttendanceSession.objects.create(
-                name=name,
+                name=enhanced_name,
                 date=session_date,
                 start_time=start_time,
-                end_time=end_time
+                end_time=end_time,
+                teacher=request.user,
+                class_session=class_obj
             )
             
             return JsonResponse({
-                "message": f"Session '{name}' created successfully",
-                "session_id": session.id
+                "message": f"Session '{enhanced_name}' created successfully for {class_obj.name}",
+                "session_id": session.id,
+                "session_data": {
+                    "id": session.id,
+                    "name": enhanced_name,
+                    "class_name": class_obj.name,
+                    "date": session_date.strftime('%Y-%m-%d'),
+                    "start_time": start_time.strftime('%H:%M'),
+                    "end_time": end_time.strftime('%H:%M') if end_time else None,
+                }
             })
             
         except ValueError as e:
@@ -621,16 +833,14 @@ def create_session(request):
     
     return JsonResponse({"error": "Use POST request"}, status=405)
 
-
-@csrf_exempt
+@login_required
 @require_http_methods(["GET"])
 def dashboard_data(request):
-    """
-    Enhanced API endpoint that returns comprehensive attendance data for the dashboard
-    """
+    """Enhanced API endpoint that returns comprehensive attendance data for the dashboard"""
     try:
-        # Get complete attendance data
-        data = get_complete_attendance_data()
+        # Get data filtered by teacher (unless admin)
+        teacher = None if request.user.is_admin else request.user
+        data = get_complete_attendance_data(teacher)
         
         # Add additional analytics
         data['analytics'] = {
@@ -681,12 +891,20 @@ def dashboard_data(request):
                     'count': sessions_by_attendance[-1][1]['present_count']
                 }
         
+        # Add teacher info
+        data['teacher_info'] = {
+            'name': request.user.get_full_name(),
+            'username': request.user.username,
+            'department': request.user.department,
+            'is_admin': request.user.is_admin
+        }
+        
         return JsonResponse(data)
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-
+@login_required
 def dashboard(request):
     """
     Render the main dashboard page
@@ -740,3 +958,223 @@ def export_data(request):
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
+
+
+
+#new
+
+
+def signup_view(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            username = data.get('username', '').strip()
+            email = data.get('email', '').strip()
+            password = data.get('password', '').strip()
+            confirm_password = data.get('confirm_password', '').strip()
+            first_name = data.get('first_name', '').strip()
+            last_name = data.get('last_name', '').strip()
+            phone = data.get('phone', '').strip()
+            department = data.get('department', '').strip()
+            employee_id = data.get('employee_id', '').strip()
+            
+            # Validation
+            if not all([username, email, password, first_name, last_name]):
+                return JsonResponse({'error': 'Please fill in all required fields'}, status=400)
+            
+            if password != confirm_password:
+                return JsonResponse({'error': 'Passwords do not match'}, status=400)
+            
+            if len(password) < 8:
+                return JsonResponse({'error': 'Password must be at least 8 characters long'}, status=400)
+            
+            if Teacher.objects.filter(username=username).exists():
+                return JsonResponse({'error': 'Username already exists'}, status=400)
+            
+            if Teacher.objects.filter(email=email).exists():
+                return JsonResponse({'error': 'Email already registered'}, status=400)
+            
+            if employee_id and Teacher.objects.filter(employee_id=employee_id).exists():
+                return JsonResponse({'error': 'Employee ID already exists'}, status=400)
+            
+            # Create teacher account
+            with transaction.atomic():
+                teacher = Teacher.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone=phone,
+                    department=department,
+                    employee_id=employee_id if employee_id else None
+                )
+                
+                # Auto-login after successful signup
+                login(request, teacher)
+                
+            return JsonResponse({
+                'message': 'Account created successfully!',
+                'redirect': '/dashboard/'
+            })
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return render(request, 'auth/signup.html')
+
+@csrf_exempt
+def login_view(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            username = data.get('username', '').strip()
+            password = data.get('password', '').strip()
+            
+            if not username or not password:
+                return JsonResponse({'error': 'Please enter both username and password'}, status=400)
+            
+            # Authenticate user
+            user = authenticate(request, username=username, password=password)
+            
+            if user is not None:
+                login(request, user)
+                return JsonResponse({
+                    'message': 'Login successful!',
+                    'redirect': '/dashboard/',
+                    'user': {
+                        'name': user.get_full_name(),
+                        'username': user.username,
+                        'is_admin': user.is_admin
+                    }
+                })
+            else:
+                return JsonResponse({'error': 'Invalid username or password'}, status=400)
+                
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return render(request, 'auth/login.html')
+
+@login_required
+def logout_view(request):
+    logout(request)
+    return redirect('/login/')
+
+@login_required
+@csrf_exempt
+def create_class(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            name = data.get('name', '').strip()
+            code = data.get('code', '').strip()
+            description = data.get('description', '').strip()
+            academic_year = data.get('academic_year', '2024-2025').strip()
+            semester = data.get('semester', 'Fall').strip()
+            
+            if not name or not code:
+                return JsonResponse({'error': 'Class name and code are required'}, status=400)
+            
+            # Check if class code already exists for this teacher
+            if Class.objects.filter(teacher=request.user, code=code).exists():
+                return JsonResponse({'error': 'You already have a class with this code'}, status=400)
+            
+            # Create class
+            new_class = Class.objects.create(
+                name=name,
+                code=code,
+                teacher=request.user,
+                description=description,
+                academic_year=academic_year,
+                semester=semester
+            )
+            
+            return JsonResponse({
+                'message': f'Class "{name}" created successfully!',
+                'class_id': new_class.id,
+                'class_data': {
+                    'id': new_class.id,
+                    'name': new_class.name,
+                    'code': new_class.code,
+                    'student_count': 0
+                }
+            })
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@login_required
+def get_teacher_classes(request):
+    """Get classes for the logged-in teacher"""
+    try:
+        classes = Class.objects.filter(teacher=request.user, is_active=True)
+        classes_data = []
+        
+        for cls in classes:
+            student_count = cls.students.filter(is_active=True).count()
+            session_count = cls.sessions.count()
+            
+            classes_data.append({
+                'id': cls.id,
+                'name': cls.name,
+                'code': cls.code,
+                'description': cls.description,
+                'academic_year': cls.academic_year,
+                'semester': cls.semester,
+                'student_count': student_count,
+                'session_count': session_count,
+                'created_at': cls.created_at.strftime('%Y-%m-%d')
+            })
+        
+        return JsonResponse({
+            'classes': classes_data,
+            'teacher': {
+                'name': request.user.get_full_name(),
+                'username': request.user.username,
+                'department': request.user.department
+            }
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@csrf_exempt
+def assign_student_to_class(request):
+    """Assign a student to one of teacher's classes"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            student_id = data.get('student_id')
+            class_id = data.get('class_id')
+            
+            if not student_id or not class_id:
+                return JsonResponse({'error': 'Student ID and Class ID are required'}, status=400)
+            
+            # Verify the class belongs to the logged-in teacher
+            try:
+                class_obj = Class.objects.get(id=class_id, teacher=request.user)
+            except Class.DoesNotExist:
+                return JsonResponse({'error': 'Class not found or you do not have permission'}, status=404)
+            
+            try:
+                student = Student.objects.get(id=student_id, is_active=True)
+            except Student.DoesNotExist:
+                return JsonResponse({'error': 'Student not found'}, status=404)
+            
+            # Add student to class
+            class_obj.students.add(student)
+            
+            return JsonResponse({
+                'message': f'{student.name} assigned to {class_obj.name} successfully!',
+                'class_name': class_obj.name,
+                'student_name': student.name
+            })
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)

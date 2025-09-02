@@ -2,6 +2,19 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path('signup/', views.signup_view, name='signup'),
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    
+    # Teacher Class Management URLs
+     path('class_management/', views.class_management, name='class_management'),
+    path('create_class/', views.create_class, name='create_class'),
+      path('get_teacher_students/', views.get_teacher_students, name='get_teacher_students'), 
+    path('get_teacher_classes/', views.get_teacher_classes, name='get_teacher_classes'),
+    path('assign_student_to_class/', views.assign_student_to_class, name='assign_student_to_class'),
+    path('get_all_students/', views.get_all_students, name='get_all_students'),
+    
+    
     path('', views.home, name='home'),
     path("take_attendance/", views.take_attendance, name="take_attendance"),
     path('records/', views.view_records, name='records'),

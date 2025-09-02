@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Class Management - Attendance System</title>
+    <style>
+        :root { 
+            --primary: #3b82f6; 
+            --success: #22c55e; 
+            --error: #ef4444; 
+            --warning: #f59e0b;
+            --gray: #6b7280; 
+            --light-gray: #f3f4f6; 
+            --dark: #111827; 
+            --border: #d1d5db; 
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: var(--dark);
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .user-info span {
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: var(--error);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .logout-btn:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            padding: 0.25rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .nav-tab {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            color: var(--gray);
+        }
+        
+        .nav-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--dark);
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #16a34a;
+        }
+        
+        .btn-error {
+            background: var(--error);
+            color: white;
+        }
+        
+        .btn-error:hover:not(:disabled) {
+            background: #dc2626;
+        }
+        
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-warning:hover:not(:disabled) {
+            background: #d97706;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-weight: 500;
+            display: none;
+        }
+        
+        .alert.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: #15803d;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+        
+        .alert.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #dc2626;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .classes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .class-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .class-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .class-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+        
+        .class-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0.25rem;
+        }
+        
+        .class-code {
+            font-size: 0.85rem;
+            color: var(--primary);
+            font-weight: 500;
+        }
+        
+        .class-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .stat {
+            text-align: center;
+            padding: 0.75rem;
+            background: var(--light-gray);
+            border-radius: 8px;
+        }
+        
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--gray);
+            font-weight: 500;
+        }
+        
+        .class-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gray);
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: var(--gray);
+            padding: 2rem;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top: 2px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .class-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>Class Management</h1>
+            <div class="user-info">
+                <span id="teacherName">Loading...</span>
+                <a href="/logout/" class="logout-btn">Logout</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="nav-tabs">
+            <button class="nav-tab active" data-tab="classes">My Classes</button>
+            <button class="nav-tab" data-tab="create">Create Class</button>
+            <button class="nav-tab" data-tab="session">Create Session</button>
+            <button class="nav-tab" data-tab="students">Manage Students</button>
+            <button class="nav-tab" data-tab="attendance">Take Attendance</button>
+        </div>
+        
+        <!-- My Classes Tab -->
+        <div id="classes" class="tab-content active">
+            <div id="classesLoading" class="loading">
+                <div class="spinner"></div>
+                <span>Loading your classes...</span>
+            </div>
+            
+            <div id="classesContent" style="display: none;">
+                <div id="classesGrid" class="classes-grid"></div>
+                
+                <div id="emptyClasses" class="empty-state" style="display: none;">
+                    <h3>No Classes Found</h3>
+                    <p>You haven't created any classes yet. Click "Create Class" to get started.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Create Class Tab -->
+        <div id="create" class="tab-content">
+            <div class="card">
+                <h2>Create New Class</h2>
+                
+                <div id="createAlert" class="alert"></div>
+                
+                <form id="createClassForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="className">Class Name *</label>
+                            <input type="text" id="className" required placeholder="e.g., Physics 101">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="classCode">Class Code *</label>
+                            <input type="text" id="classCode" required placeholder="e.g., PHY101">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="academicYear">Academic Year</label>
+                            <select id="academicYear">
+                                <option value="2024-2025">2024-2025</option>
+                                <option value="2025-2026">2025-2026</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="semester">Semester</label>
+                            <select id="semester">
+                                <option value="Fall">Fall</option>
+                                <option value="Spring">Spring</option>
+                                <option value="Summer">Summer</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label for="description">Description</label>
+                            <textarea id="description" placeholder="Brief description of the class..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span id="createBtnText">Create Class</span>
+                        <div id="createBtnLoading" style="display: none;">
+                            <div class="spinner" style="width: 16px; height: 16px;"></div>
+                            <span>Creating...</span>
+                        </div>
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Create Session Tab -->
+        <div id="session" class="tab-content">
+            <div class="card">
+                <h2>Create New Session</h2>
+                
+                <div id="sessionAlert" class="alert"></div>
+                
+                <form id="createSessionForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="sessionName">Session Name *</label>
+                            <input type="text" id="sessionName" required placeholder="e.g., Chapter 5 Quiz, Midterm Review">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sessionClass">Select Class *</label>
+                            <select id="sessionClass" required>
+                                <option value="">Choose a class...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="sessionDate">Date *</label>
+                            <input type="date" id="sessionDate" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="startTime">Start Time *</label>
+                            <input type="time" id="startTime" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="endTime">End Time</label>
+                            <input type="time" id="endTime" placeholder="Optional">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span id="sessionBtnText">Create Session</span>
+                        <div id="sessionBtnLoading" style="display: none;">
+                            <div class="spinner" style="width: 16px; height: 16px;"></div>
+                            <span>Creating...</span>
+                        </div>
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Manage Students Tab -->
+        <div id="students" class="tab-content">
+            <!-- Students List -->
+            <div class="card">
+                <h2>Students in Your Classes</h2>
+                
+                <div style="margin-bottom: 1rem;">
+                    <label for="filterByClass">Filter by Class:</label>
+                    <select id="filterByClass" style="margin-left: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+                        <option value="">All Classes</option>
+                    </select>
+                </div>
+                
+                <div id="studentsLoading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Loading students...</span>
+                </div>
+                
+                <div id="studentsContainer">
+                    <div id="studentsGrid" class="classes-grid"></div>
+                    <div id="emptyStudents" class="empty-state" style="display: none;">
+                        <h3>No Students Found</h3>
+                        <p>No students have been added to your classes yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Take Attendance Tab -->
+        <div id="attendance" class="tab-content">
+            <div class="card">
+                <h2>Quick Attendance</h2>
+                <p style="color: var(--gray); margin-bottom: 1rem;">
+                    Go to the main attendance page to take attendance for your classes.
+                </p>
+                <a href="/" class="btn btn-primary">Go to Attendance System</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTeacher = null;
+        let classes = [];
+
+        // Tab switching
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabId = tab.dataset.tab;
+                
+                // Update active tab
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update active content
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                document.getElementById(tabId).classList.add('active');
+                
+                // Load data if needed
+                if (tabId === 'classes') {
+                    loadClasses();
+                } else if (tabId === 'session') {
+                    populateClassDropdown();
+                    setDefaultSessionDate();
+                } else if (tabId === 'students') {
+                    populateFilterDropdown();
+                    loadStudents();
+                }
+            });
+        });
+
+        // Load teacher classes
+        async function loadClasses() {
+            document.getElementById('classesLoading').style.display = 'flex';
+            document.getElementById('classesContent').style.display = 'none';
+            
+            try {
+                const response = await fetch('/get_teacher_classes/');
+                const data = await response.json();
+                
+                if (data.classes) {
+                    classes = data.classes;
+                    currentTeacher = data.teacher;
+                    
+                    // Update teacher name in header
+                    document.getElementById('teacherName').textContent = currentTeacher.name || currentTeacher.username;
+                    
+                    renderClasses();
+                } else {
+                    throw new Error(data.error || 'Failed to load classes');
+                }
+            } catch (error) {
+                console.error('Error loading classes:', error);
+                showAlert('createAlert', 'Error loading classes: ' + error.message, 'error');
+            } finally {
+                document.getElementById('classesLoading').style.display = 'none';
+                document.getElementById('classesContent').style.display = 'block';
+            }
+        }
+
+        function renderClasses() {
+            const grid = document.getElementById('classesGrid');
+            const empty = document.getElementById('emptyClasses');
+            
+            if (classes.length === 0) {
+                grid.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+            
+            grid.style.display = 'grid';
+            empty.style.display = 'none';
+            
+            grid.innerHTML = classes.map(cls => `
+                <div class="class-card">
+                    <div class="class-header">
+                        <div>
+                            <div class="class-name">${cls.name}</div>
+                            <div class="class-code">${cls.code}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="class-stats">
+                        <div class="stat">
+                            <div class="stat-number">${cls.student_count}</div>
+                            <div class="stat-label">Students</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">${cls.session_count}</div>
+                            <div class="stat-label">Sessions</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 1rem 0;">
+                        <div><strong>Academic Year:</strong> ${cls.academic_year}</div>
+                        <div><strong>Semester:</strong> ${cls.semester}</div>
+                        <div><strong>Created:</strong> ${cls.created_at}</div>
+                        ${cls.description ? `<div style="margin-top: 0.5rem; color: var(--gray); font-size: 0.9rem;">${cls.description}</div>` : ''}
+                    </div>
+                    
+                    <div class="class-actions">
+                        <button class="btn btn-primary btn-small" onclick="createSessionForClass(${cls.id}, '${cls.name}')">
+                            New Session
+                        </button>
+                        <button class="btn btn-success btn-small" onclick="viewClassDetails(${cls.id})">
+                            View Details
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Create class form
+        document.getElementById('createClassForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('className').value.trim(),
+                code: document.getElementById('classCode').value.trim().toUpperCase(),
+                description: document.getElementById('description').value.trim(),
+                academic_year: document.getElementById('academicYear').value,
+                semester: document.getElementById('semester').value
+            };
+            
+            if (!formData.name || !formData.code) {
+                showAlert('createAlert', 'Please fill in all required fields', 'error');
+                return;
+            }
+            
+            setCreateLoading(true);
+            
+            try {
+                const response = await fetch('/create_class/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showAlert('createAlert', data.message, 'success');
+                    
+                    // Reset form
+                    document.getElementById('createClassForm').reset();
+                    
+                    // Add new class to list
+                    if (data.class_data) {
+                        classes.push(data.class_data);
+                        renderClasses();
+                    }
+                    
+                    // Switch to classes tab after 1.5 seconds
+                    setTimeout(() => {
+                        document.querySelector('[data-tab="classes"]').click();
+                    }, 1500);
+                    
+                } else {
+                    showAlert('createAlert', data.error || 'Failed to create class', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating class:', error);
+                showAlert('createAlert', 'Network error. Please try again.', 'error');
+            } finally {
+                setCreateLoading(false);
+            }
+        });
+
+        function setCreateLoading(loading) {
+            const btn = document.querySelector('#createClassForm button[type="submit"]');
+            const text = document.getElementById('createBtnText');
+            const loadingEl = document.getElementById('createBtnLoading');
+            
+            btn.disabled = loading;
+            text.style.display = loading ? 'none' : 'block';
+            loadingEl.style.display = loading ? 'flex' : 'none';
+        }
+
+        function showAlert(elementId, message, type) {
+            const alert = document.getElementById(elementId);
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            alert.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    alert.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let cookie of cookies) {
+                    cookie = cookie.trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        function createSessionForClass(classId, className) {
+            // Redirect to main page with class pre-selected via URL parameters
+            window.location.href = `/?class_id=${classId}&class_name=${encodeURIComponent(className)}`;
+        }
+
+        function viewClassDetails(classId) {
+            // For now, just show an alert. You can extend this to show a modal with detailed class info
+            alert('Class details view - Coming soon! Class ID: ' + classId);
+        }
+
+        // Populate class dropdown for session creation
+        function populateClassDropdown() {
+            const classSelect = document.getElementById('sessionClass');
+            
+            // Clear existing options except the first one
+            classSelect.innerHTML = '<option value="">Choose a class...</option>';
+            
+            if (classes && classes.length > 0) {
+                classes.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls.id;
+                    option.textContent = `${cls.name} (${cls.code})`;
+                    classSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Set default session date to today
+        function setDefaultSessionDate() {
+            const today = new Date();
+            const formattedDate = today.toISOString().split('T')[0];
+            document.getElementById('sessionDate').value = formattedDate;
+            
+            // Set default start time to current time + 1 hour
+            const oneHourLater = new Date(today.getTime() + 60 * 60 * 1000);
+            const hours = String(oneHourLater.getHours()).padStart(2, '0');
+            const minutes = String(oneHourLater.getMinutes()).padStart(2, '0');
+            document.getElementById('startTime').value = `${hours}:${minutes}`;
+        }
+
+        // Create session form
+        document.getElementById('createSessionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('sessionName').value.trim(),
+                class_id: document.getElementById('sessionClass').value,
+                date: document.getElementById('sessionDate').value,
+                start_time: document.getElementById('startTime').value,
+                end_time: document.getElementById('endTime').value.trim()
+            };
+            
+            if (!formData.name || !formData.class_id || !formData.date || !formData.start_time) {
+                showAlert('sessionAlert', 'Please fill in all required fields', 'error');
+                return;
+            }
+            
+            // Validate that end time is after start time if provided
+            if (formData.end_time && formData.end_time <= formData.start_time) {
+                showAlert('sessionAlert', 'End time must be after start time', 'error');
+                return;
+            }
+            
+            setSessionLoading(true);
+            
+            try {
+                const response = await fetch('/create_session/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showAlert('sessionAlert', data.message, 'success');
+                    
+                    // Reset form
+                    document.getElementById('createSessionForm').reset();
+                    setDefaultSessionDate();
+                    
+                    // Switch to classes tab after 2 seconds
+                    setTimeout(() => {
+                        document.querySelector('[data-tab="classes"]').click();
+                    }, 2000);
+                    
+                } else {
+                    showAlert('sessionAlert', data.error || 'Failed to create session', 'error');
+                }
+            } catch (error) {
+                console.error('Error creating session:', error);
+                showAlert('sessionAlert', 'Network error. Please try again.', 'error');
+            } finally {
+                setSessionLoading(false);
+            }
+        });
+
+        function setSessionLoading(loading) {
+            const btn = document.querySelector('#createSessionForm button[type="submit"]');
+            const text = document.getElementById('sessionBtnText');
+            const loadingEl = document.getElementById('sessionBtnLoading');
+            
+            btn.disabled = loading;
+            text.style.display = loading ? 'none' : 'block';
+            loadingEl.style.display = loading ? 'flex' : 'none';
+        }
+
+        // =============== STUDENT MANAGEMENT FUNCTIONS ===============
+        
+        let allStudents = [];
+
+        // Populate filter dropdown for student list
+        function populateFilterDropdown() {
+            const filterByClassSelect = document.getElementById('filterByClass');
+            
+            // Clear existing options
+            filterByClassSelect.innerHTML = '<option value="">All Classes</option>';
+            
+            if (classes && classes.length > 0) {
+                classes.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls.id;
+                    option.textContent = `${cls.name} (${cls.code})`;
+                    filterByClassSelect.appendChild(option);
+                });
+            }
+        }
+
+        // Load students for the teacher
+        async function loadStudents() {
+            document.getElementById('studentsLoading').style.display = 'flex';
+            
+            try {
+                const response = await fetch('/get_teacher_students/');
+                const data = await response.json();
+                
+                if (data.students) {
+                    allStudents = data.students;
+                    renderStudents();
+                } else {
+                    throw new Error(data.error || 'Failed to load students');
+                }
+            } catch (error) {
+                console.error('Error loading students:', error);
+                showAlert('studentAlert', 'Error loading students: ' + error.message, 'error');
+            } finally {
+                document.getElementById('studentsLoading').style.display = 'none';
+            }
+        }
+
+        // Filter students by class
+        document.getElementById('filterByClass').addEventListener('change', function() {
+            renderStudents();
+        });
+
+        function renderStudents() {
+            const grid = document.getElementById('studentsGrid');
+            const empty = document.getElementById('emptyStudents');
+            const filterClassId = document.getElementById('filterByClass').value;
+            
+            let filteredStudents = allStudents;
+            if (filterClassId) {
+                filteredStudents = allStudents.filter(student => 
+                    student.classes && student.classes.some(cls => cls.id == filterClassId)
+                );
+            }
+            
+            if (filteredStudents.length === 0) {
+                grid.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+            
+            grid.style.display = 'grid';
+            empty.style.display = 'none';
+            
+            grid.innerHTML = filteredStudents.map(student => `
+                <div class="class-card">
+                    <div class="class-header">
+                        <div>
+                            <div class="class-name">${student.name}</div>
+                            <div class="class-code">${student.student_id || 'No ID'}</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 1rem 0;">
+                        <div><strong>Email:</strong> ${student.email || 'Not provided'}</div>
+                        <div><strong>Phone:</strong> ${student.phone || 'Not provided'}</div>
+                        <div><strong>Classes:</strong> ${student.classes ? student.classes.map(cls => cls.name).join(', ') : 'None'}</div>
+                        <div><strong>Added:</strong> ${student.created_at}</div>
+                    </div>
+                    
+                    <div class="class-actions">
+                        <button class="btn btn-primary btn-small" onclick="editStudent(${student.id})">
+                            Edit
+                        </button>
+                        <button class="btn btn-error btn-small" onclick="removeStudentFromClass(${student.id})">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Placeholder functions for student management
+        function editStudent(studentId) {
+            alert('Edit student functionality - Coming soon! Student ID: ' + studentId);
+        }
+
+        function removeStudentFromClass(studentId) {
+            if (confirm('Are you sure you want to remove this student from your classes?')) {
+                // Implementation for removing student
+                alert('Remove student functionality - Coming soon! Student ID: ' + studentId);
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadClasses();
+        });
+    </script>
+</body>
+</html>

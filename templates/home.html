@@ -194,6 +194,14 @@
       <a href="/add_student/">👤 Add Student</a>
       <a href="/dashboard/">📊 View Records</a>
       <a href="/ai_assistant/">🤖 AI Assistant</a>
+      {% if user.is_authenticated %}
+    <span>Welcome, {{ user.get_full_name }}</span>
+    <a href="/class_management/">Manage Classes</a>
+    <a href="/logout/">Logout</a>
+{% else %}
+    <a href="/login/">Login</a>
+    <a href="/signup/">Sign Up</a>
+{% endif %}
     </div>
     
     <h1>📷 Face Recognition Attendance</h1>
