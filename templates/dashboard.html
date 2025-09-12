@@ -579,30 +579,33 @@
         let dashboardData = null;
         let charts = {};
 
-        // Generate sample data with more realistic session distribution
+        // Generate sample data with proper structure for filtering
         function generateSampleData() {
             const students = ["John Doe", "Jane Smith", "Bob Johnson", "Alice Brown", "Charlie Davis", "Emma Wilson", "Michael Chen", "Sarah Lee", "David Kim", "Lisa Garcia"];
             const sessions = ["Math 101", "Science 101", "English 101", "History 101", "Art Class", "PE Class"];
             const records = [];
             
-            // Generate 30 days of attendance records with multiple sessions per day
+            // Generate date-based session combinations
+            const sessionsByDate = {};
+            
+            // Generate 30 days of attendance records
             for (let i = 0; i < 30; i++) {
                 const date = new Date();
                 date.setDate(date.getDate() - i);
                 const dateStr = date.toISOString().split('T')[0];
                 
-                // Create more varied session distribution
-                sessions.forEach(sessionName => {
-                    // Only create this session 50% of the time
-                    if (Math.random() > 0.5) return;
-                    
+                // Randomly select 2-4 sessions per day
+                const dailySessions = sessions.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 2);
+                sessionsByDate[dateStr] = dailySessions;
+                
+                dailySessions.forEach(sessionName => {
                     students.forEach(student => {
                         if (Math.random() > 0.15) { // 85% attendance rate
                             records.push({
                                 student__name: student,
                                 session__name: sessionName,
                                 date: dateStr,
-                                time: `${8 + Math.floor(Math.random() * 4)}:${Math.random() > 0.5 ? '00' : '30'}`,
+                                time: `${8 + Math.floor(Math.random() * 4)}:${Math.random() > 0.5 ? '00' : '30'}:00`,
                                 is_late: Math.random() > 0.8 // 20% late rate
                             });
                         }
@@ -610,15 +613,47 @@
                 });
             }
 
-            // Get unique sessions that actually have records
+            // Get unique sessions and dates that actually have records
             const uniqueSessions = [...new Set(records.map(r => r.session__name))];
+            const uniqueDates = [...new Set(records.map(r => r.date))].sort();
+
+            // Create detailed session information
+            const sessionDetails = {};
+            uniqueDates.forEach(date => {
+                const dateSessions = sessionsByDate[date] || [];
+                dateSessions.forEach(sessionName => {
+                    const key = `${sessionName}_${date}`;
+                    const sessionRecords = records.filter(r => r.session__name === sessionName && r.date === date);
+                    const presentStudentNames = sessionRecords.map(r => r.student__name);
+                    const absentStudentNames = students.filter(s => !presentStudentNames.includes(s));
+                    
+                    sessionDetails[key] = {
+                        session_info: {
+                            name: sessionName,
+                            date: date,
+                            start_time: "09:00:00"
+                        },
+                        present_students: sessionRecords.map(r => ({
+                            name: r.student__name,
+                            time: r.time,
+                            is_late: r.is_late
+                        })),
+                        absent_students: absentStudentNames,
+                        present_count: sessionRecords.length,
+                        absent_count: absentStudentNames.length,
+                        late_students: sessionRecords.filter(r => r.is_late).map(r => r.student__name),
+                        on_time_students: sessionRecords.filter(r => !r.is_late).map(r => r.student__name)
+                    };
+                });
+            });
 
             return {
                 total_students: students.length,
                 total_sessions: uniqueSessions.length,
                 all_attendance_records: records,
-                students_list: students,
+                all_students: students.map(name => ({ name, id: name.toLowerCase().replace(' ', '_') })),
                 sessions_list: uniqueSessions, // This is what populates the dropdown
+                unique_dates: uniqueDates, // Available dates
                 student_statistics: {
                     "John Doe": { total_sessions_attended: 28, times_late: 3, attendance_percentage: 95 },
                     "Jane Smith": { total_sessions_attended: 25, times_late: 1, attendance_percentage: 87 },
@@ -631,14 +666,7 @@
                     "David Kim": { total_sessions_attended: 27, times_late: 2, attendance_percentage: 93 },
                     "Lisa Garcia": { total_sessions_attended: 21, times_late: 6, attendance_percentage: 78 }
                 },
-                session_details: {
-                    "math_101": { session_info: { name: "Math 101", date: "2024-11-20" }, present_count: 23, absent_count: 2 },
-                    "science_101": { session_info: { name: "Science 101", date: "2024-11-19" }, present_count: 20, absent_count: 5 },
-                    "english_101": { session_info: { name: "English 101", date: "2024-11-18" }, present_count: 24, absent_count: 1 },
-                    "history_101": { session_info: { name: "History 101", date: "2024-11-17" }, present_count: 19, absent_count: 6 },
-                    "art_class": { session_info: { name: "Art Class", date: "2024-11-16" }, present_count: 22, absent_count: 3 },
-                    "pe_class": { session_info: { name: "PE Class", date: "2024-11-15" }, present_count: 25, absent_count: 0 }
-                }
+                session_details: sessionDetails
             };
         }
 
@@ -701,6 +729,7 @@
                 updateStats();
                 updateCharts();
                 updateTables();
+                populateControls();
             }
         }
 
@@ -1091,13 +1120,18 @@
         }
 
         function populateControls() {
-            if (!dashboardData) return;
+            if (!dashboardData) {
+                console.log('No dashboard data available for populating controls');
+                return;
+            }
             
-            // Populate session dropdown - FIXED: Use the correct property
+            // Populate session dropdown
             const sessionSelect = document.getElementById('sessionSelect');
             sessionSelect.innerHTML = '<option value="">All Sessions</option>';
             
-            console.log('Sessions list:', dashboardData.sessions_list); // Debug log
+            console.log('Dashboard data structure:', Object.keys(dashboardData));
+            console.log('Sessions list:', dashboardData.sessions_list);
+            console.log('All attendance records:', dashboardData.all_attendance_records?.length || 0);
             
             if (dashboardData.sessions_list && dashboardData.sessions_list.length > 0) {
                 dashboardData.sessions_list.forEach(session => {
@@ -1106,23 +1140,69 @@
                     option.textContent = session;
                     sessionSelect.appendChild(option);
                 });
+                console.log('Populated', dashboardData.sessions_list.length, 'sessions');
             } else {
                 console.warn('No sessions found in sessions_list');
+                // Try to get sessions from records as fallback
+                if (dashboardData.all_attendance_records) {
+                    const uniqueSessions = [...new Set(dashboardData.all_attendance_records.map(r => r.session__name))];
+                    console.log('Fallback: Found sessions from records:', uniqueSessions);
+                    uniqueSessions.forEach(session => {
+                        const option = document.createElement('option');
+                        option.value = session;
+                        option.textContent = session;
+                        sessionSelect.appendChild(option);
+                    });
+                }
             }
             
-            // Set default date to today
+            // Set default date to the most recent date with data
             const dateSelect = document.getElementById('dateSelect');
-            if (!dateSelect.value) {
-                const today = new Date().toISOString().split('T')[0];
-                dateSelect.value = today;
+            if (dashboardData.unique_dates && dashboardData.unique_dates.length > 0) {
+                // Set to most recent date that has data
+                dateSelect.value = dashboardData.unique_dates[dashboardData.unique_dates.length - 1];
+                console.log('Set default date to:', dateSelect.value);
+            } else if (!dateSelect.value) {
+                // Fallback: get dates from records
+                if (dashboardData.all_attendance_records) {
+                    const uniqueDates = [...new Set(dashboardData.all_attendance_records.map(r => r.date))].sort();
+                    if (uniqueDates.length > 0) {
+                        dateSelect.value = uniqueDates[uniqueDates.length - 1];
+                        console.log('Fallback: Set date to most recent from records:', dateSelect.value);
+                    }
+                } else {
+                    // Last fallback to today
+                    const today = new Date().toISOString().split('T')[0];
+                    dateSelect.value = today;
+                    console.log('Final fallback: Set date to today:', dateSelect.value);
+                }
             }
+            
+            // Add a test button to verify data is working
+            const testButton = document.createElement('button');
+            testButton.textContent = '🔍 Test Filter Data';
+            testButton.className = 'btn';
+            testButton.style.marginLeft = '10px';
+            testButton.onclick = function() {
+                console.log('=== FILTER TEST ===');
+                console.log('Sessions available:', dashboardData.sessions_list);
+                console.log('Records count:', dashboardData.all_attendance_records?.length);
+                console.log('Sample records:', dashboardData.all_attendance_records?.slice(0, 3));
+                console.log('Unique sessions in records:', [...new Set(dashboardData.all_attendance_records?.map(r => r.session__name) || [])]);
+                console.log('Unique dates in records:', [...new Set(dashboardData.all_attendance_records?.map(r => r.date) || [])]);
+                alert('Check console for detailed filter data');
+            };
+            
+            // Add test button after refresh button
+            const refreshButton = document.querySelector('.primary-btn');
+            refreshButton.parentNode.appendChild(testButton);
         }
 
         function updateSessionData() {
             const selectedSession = document.getElementById('sessionSelect').value;
             const selectedDate = document.getElementById('dateSelect').value;
             
-            console.log('Selected session:', selectedSession, 'Selected date:', selectedDate);
+            console.log('Filtering - Session:', selectedSession, 'Date:', selectedDate);
             
             if (!selectedSession || !selectedDate) {
                 document.getElementById('sessionDetailsCard').style.display = 'none';
@@ -1136,10 +1216,18 @@
                 return sessionMatch && dateMatch;
             });
             
-            console.log('Filtered records:', filteredRecords);
+            console.log('Filtered records found:', filteredRecords.length);
             
-            // Get all students and determine who was present/absent
-            const allStudents = dashboardData.students_list || [];
+            // Get all students (from the all_students array or derive from records)
+            let allStudents = [];
+            if (dashboardData.all_students) {
+                allStudents = dashboardData.all_students.map(s => typeof s === 'string' ? s : s.name);
+            } else {
+                // Fallback: get unique students from all records
+                allStudents = [...new Set(dashboardData.all_attendance_records.map(r => r.student__name))];
+            }
+            
+            // Determine who was present/absent
             const presentStudents = filteredRecords.map(record => ({
                 name: record.student__name,
                 isLate: record.is_late,
@@ -1156,6 +1244,8 @@
             const absentCount = absentStudents.length;
             const totalStudents = presentCount + absentCount;
             const attendancePercentage = totalStudents > 0 ? Math.round((presentCount / totalStudents) * 100) : 0;
+            
+            console.log('Stats - Present:', presentCount, 'Absent:', absentCount, 'Total:', totalStudents);
             
             // Update the session details card
             document.getElementById('sessionTitle').textContent = `📋 ${selectedSession} - ${selectedDate}`;
@@ -1174,7 +1264,7 @@
                     </div>
                 `).join('');
             } else {
-                presentList.innerHTML = '<div class="student-item" style="opacity: 0.6;">No students present</div>';
+                presentList.innerHTML = '<div class="student-item" style="opacity: 0.6; color: #9ca3af;">No students present this session</div>';
             }
             
             // Update absent students list
@@ -1186,23 +1276,17 @@
                     </div>
                 `).join('');
             } else {
-                absentList.innerHTML = '<div class="student-item" style="opacity: 0.6;">All students present! 🎉</div>';
+                absentList.innerHTML = '<div class="student-item" style="opacity: 0.6; color: #22c55e;">Perfect attendance! 🎉</div>';
             }
             
             // Show the session details card
             document.getElementById('sessionDetailsCard').style.display = 'block';
             
-            // Update charts with filtered data
-            updateChartsWithFilter(selectedSession, selectedDate);
-        }
-
-        function updateChartsWithFilter(sessionName, date) {
-            // Update the daily chart to highlight the selected date
-            createDailyChart();
-            
-            // Update other charts as needed based on the filter
-            createStudentChart();
-            createLateChart();
+            // Scroll to the session details card
+            document.getElementById('sessionDetailsCard').scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+            });
         }
     </script>
 </body>

@@ -291,7 +291,7 @@ def view_records(request):
     return render(request, 'ai_assistant.html')
 
 def get_complete_attendance_data(teacher=None):
-    """Get COMPLETE attendance data for AI with proper absence tracking"""
+    """Get COMPLETE attendance data for AI with FIXED absence tracking"""
     
     # Filter by teacher if provided (for teacher-specific data)
     if teacher:
@@ -333,23 +333,56 @@ def get_complete_attendance_data(teacher=None):
         if record['arrival_time']:
             record['arrival_time'] = record['arrival_time'].strftime('%H:%M:%S')
     
-    # Calculate attendance statistics for each student
+    # FIXED: Calculate attendance statistics for each student based on sessions they actually attended
     student_stats = {}
     for student in all_students:
         student_records = [r for r in all_records if r['student_id'] == student['id']]
+        
+        # Get unique sessions this student attended
+        sessions_attended = len(set(r['session_id'] for r in student_records))
+        times_late = len([r for r in student_records if r['is_late']])
+        times_on_time = len([r for r in student_records if not r['is_late']])
+        
+        # FIXED: Calculate percentage based on sessions attended vs total sessions they could attend
+        # For now, we'll use the total sessions as denominator, but this could be refined
+        # to only count sessions for classes the student is enrolled in
+        attendance_percentage = round((sessions_attended / len(all_sessions)) * 100, 1) if all_sessions else 0
+        
         student_stats[student['name']] = {
-            'total_sessions_attended': len(student_records),
-            'times_late': len([r for r in student_records if r['is_late']]),
-            'times_on_time': len([r for r in student_records if not r['is_late']]),
-            'attendance_percentage': round((len(student_records) / len(all_sessions)) * 100, 1) if all_sessions else 0
+            'total_sessions_attended': sessions_attended,
+            'times_late': times_late,
+            'times_on_time': times_on_time,
+            'attendance_percentage': attendance_percentage
         }
     
-    # For each session, calculate who was present and who was absent
+    # FIXED: For each session, calculate attendance based on who was actually present vs eligible
     session_details = {}
     for session in all_sessions:
         session_key = f"{session['name']}_{session['date']}"
-        present_students = [r['student__name'] for r in all_records if r['session_id'] == session['id']]
-        absent_students = [s['name'] for s in all_students if s['name'] not in present_students]
+        
+        # Get students who attended this session
+        session_records = [r for r in all_records if r['session_id'] == session['id']]
+        present_students = [r['student__name'] for r in session_records]
+        
+        # FIXED: Instead of using all students in class, only count students who were expected
+        # For sessions without explicit enrollment, we'll assume all class students are eligible
+        # But the percentage calculation will be based on actual attendance
+        
+        # Get all students from the session's class (eligible students)
+        if teacher:
+            eligible_students = list(Student.objects.filter(
+                classes__sessions__id=session['id'], 
+                is_active=True
+            ).values_list('name', flat=True))
+        else:
+            # For demo/admin, use all students as potentially eligible
+            eligible_students = [s['name'] for s in all_students]
+        
+        # If no specific enrollment info, assume all present students were eligible
+        if not eligible_students:
+            eligible_students = present_students
+        
+        absent_students = [name for name in eligible_students if name not in present_students]
         
         session_details[session_key] = {
             'session_info': session,
@@ -357,9 +390,14 @@ def get_complete_attendance_data(teacher=None):
             'absent_students': absent_students,
             'present_count': len(present_students),
             'absent_count': len(absent_students),
-            'late_students': [r['student__name'] for r in all_records if r['session_id'] == session['id'] and r['is_late']],
-            'on_time_students': [r['student__name'] for r in all_records if r['session_id'] == session['id'] and not r['is_late']]
+            'eligible_count': len(eligible_students),  # NEW: Track eligible students
+            'late_students': [r['student__name'] for r in session_records if r['is_late']],
+            'on_time_students': [r['student__name'] for r in session_records if not r['is_late']]
         }
+    
+    # Add sessions list for dropdown (unique session names)
+    sessions_list = list(set(session['name'] for session in all_sessions))
+    unique_dates = sorted(list(set(session['date'] for session in all_sessions)))
     
     return {
         'total_students': len(all_students),
@@ -369,7 +407,9 @@ def get_complete_attendance_data(teacher=None):
         'all_sessions': all_sessions,
         'all_attendance_records': all_records,
         'student_statistics': student_stats,
-        'session_details': session_details
+        'session_details': session_details,
+        'sessions_list': sessions_list,
+        'unique_dates': unique_dates
     }
 
 # Store conversation context in memory (in production, use database or cache)
@@ -489,8 +529,10 @@ def ai_assistant(request):
 
 @login_required
 @csrf_exempt
+@login_required
+@csrf_exempt
 def get_sessions(request):
-    """Get sessions for the logged-in teacher only"""
+    """Get sessions for the logged-in teacher only - FIXED attendance calculation"""
     if request.method == "GET":
         try:
             today = date.today()
@@ -498,26 +540,39 @@ def get_sessions(request):
             
             # Filter sessions by logged-in teacher
             sessions = AttendanceSession.objects.filter(
-                teacher=request.user,  # NEW: Filter by teacher
+                teacher=request.user,
                 date__gte=today,
                 date__lte=upcoming_date
             ).order_by('date', 'start_time')
             
             session_data = []
             for session in sessions:
-                attendance_count = AttendanceRecord.objects.filter(session=session).count()
-                # Only count students from the session's class
+                # FIXED: Count actual attendees vs eligible students
+                attendance_records = AttendanceRecord.objects.filter(session=session)
+                attendance_count = attendance_records.count()
+                
+                # Get unique students who attended (in case of duplicates)
+                unique_attendees = attendance_records.values_list('student_id', flat=True).distinct().count()
+                
+                # FIXED: For total students, we need to determine who was eligible for this session
+                # Since we don't have explicit session enrollment, we'll use the class students
+                # but calculate percentage based on actual attendance
                 total_students = session.class_session.students.filter(is_active=True).count()
+                
+                # ALTERNATIVE FIX: If you want to base it only on who actually attended,
+                # you can set total_students = unique_attendees for 100% when everyone present shows up
+                # Uncomment the next line if you prefer this approach:
+                # total_students = max(unique_attendees, 1)  # Avoid division by zero
                 
                 session_data.append({
                     'id': session.id,
                     'name': session.name,
-                    'class_name': session.class_session.name,  # NEW: Include class name
+                    'class_name': session.class_session.name,
                     'date': session.date.strftime('%Y-%m-%d'),
                     'date_display': session.date.strftime('%B %d, %Y'),
                     'start_time': session.start_time.strftime('%H:%M'),
                     'end_time': session.end_time.strftime('%H:%M') if session.end_time else 'Ongoing',
-                    'attendance_count': attendance_count,
+                    'attendance_count': unique_attendees,  # FIXED: Use unique attendees
                     'total_students': total_students,
                     'is_today': session.date == today,
                     'is_past': session.date < today,
@@ -836,13 +891,28 @@ def create_session(request):
 @login_required
 @require_http_methods(["GET"])
 def dashboard_data(request):
-    """Enhanced API endpoint that returns comprehensive attendance data for the dashboard"""
+    """Enhanced API endpoint with FIXED attendance percentage calculations"""
     try:
         # Get data filtered by teacher (unless admin)
         teacher = None if request.user.is_admin else request.user
         data = get_complete_attendance_data(teacher)
         
-        # Add additional analytics
+        # FIXED: Recalculate session details with proper percentages
+        for session_key, session_detail in data['session_details'].items():
+            present_count = session_detail['present_count']
+            # CHOICE 1: Base percentage on eligible students from class
+            # eligible_count = session_detail['eligible_count']
+            
+            # CHOICE 2: Base percentage only on students who actually attended
+            # (This gives 100% when all present students are accounted for)
+            eligible_count = max(present_count, session_detail['absent_count'] + present_count)
+            
+            # Update the session info with correct percentage
+            if eligible_count > 0:
+                attendance_percentage = round((present_count / eligible_count) * 100, 1)
+                session_detail['attendance_percentage'] = attendance_percentage
+        
+        # Add additional analytics with fixed calculations
         data['analytics'] = {
             'total_records': len(data['all_attendance_records']),
             'late_percentage': 0,
@@ -874,21 +944,28 @@ def dashboard_data(request):
                     'percentage': students_by_performance[-1][1]['attendance_percentage']
                 }
         
-        # Find most and least attended sessions
+        # Find most and least attended sessions (by percentage, not just count)
         if data['session_details']:
-            sessions_by_attendance = sorted(
-                data['session_details'].items(),
-                key=lambda x: x[1]['present_count'],
-                reverse=True
-            )
-            if sessions_by_attendance:
+            sessions_with_percentage = []
+            for session_key, session_detail in data['session_details'].items():
+                if 'attendance_percentage' in session_detail:
+                    sessions_with_percentage.append((session_key, session_detail))
+            
+            if sessions_with_percentage:
+                # Sort by attendance percentage
+                sessions_by_percentage = sorted(
+                    sessions_with_percentage,
+                    key=lambda x: x[1].get('attendance_percentage', 0),
+                    reverse=True
+                )
+                
                 data['analytics']['most_attended_session'] = {
-                    'name': sessions_by_attendance[0][1]['session_info']['name'],
-                    'count': sessions_by_attendance[0][1]['present_count']
+                    'name': sessions_by_percentage[0][1]['session_info']['name'],
+                    'percentage': sessions_by_percentage[0][1].get('attendance_percentage', 0)
                 }
                 data['analytics']['least_attended_session'] = {
-                    'name': sessions_by_attendance[-1][1]['session_info']['name'],
-                    'count': sessions_by_attendance[-1][1]['present_count']
+                    'name': sessions_by_percentage[-1][1]['session_info']['name'],
+                    'percentage': sessions_by_percentage[-1][1].get('attendance_percentage', 0)
                 }
         
         # Add teacher info
@@ -903,7 +980,6 @@ def dashboard_data(request):
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-
 @login_required
 def dashboard(request):
     """
@@ -1173,6 +1249,59 @@ def assign_student_to_class(request):
                 'class_name': class_obj.name,
                 'student_name': student.name
             })
+            
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+# Add this function to your views.py file
+
+@login_required
+@csrf_exempt
+def remove_student_from_class(request):
+    """Remove a student from teacher's classes"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            student_id = data.get('student_id')
+            class_id = data.get('class_id')  # Optional: remove from specific class
+            
+            if not student_id:
+                return JsonResponse({'error': 'Student ID is required'}, status=400)
+            
+            try:
+                student = Student.objects.get(id=student_id, is_active=True)
+            except Student.DoesNotExist:
+                return JsonResponse({'error': 'Student not found'}, status=404)
+            
+            if class_id:
+                # Remove from specific class
+                try:
+                    class_obj = Class.objects.get(id=class_id, teacher=request.user)
+                    class_obj.students.remove(student)
+                    return JsonResponse({
+                        'message': f'{student.name} removed from {class_obj.name} successfully!'
+                    })
+                except Class.DoesNotExist:
+                    return JsonResponse({'error': 'Class not found or you do not have permission'}, status=404)
+            else:
+                # Remove from ALL teacher's classes
+                teacher_classes = Class.objects.filter(teacher=request.user, students=student)
+                removed_classes = []
+                
+                for class_obj in teacher_classes:
+                    class_obj.students.remove(student)
+                    removed_classes.append(class_obj.name)
+                
+                if removed_classes:
+                    return JsonResponse({
+                        'message': f'{student.name} removed from classes: {", ".join(removed_classes)}'
+                    })
+                else:
+                    return JsonResponse({
+                        'message': f'{student.name} was not in any of your classes'
+                    })
             
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)

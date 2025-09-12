@@ -2,8 +2,7 @@
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import AbstractUser
-from django.db import models
-from django.utils import timezone
+from datetime import date
 
 class Teacher(AbstractUser):
     """Custom user model for teachers with additional fields"""
@@ -41,16 +40,21 @@ class Student(models.Model):
     email = models.EmailField(null=True, blank=True)
     phone = models.CharField(max_length=15, null=True, blank=True)
     image_path = models.CharField(max_length=255)
-    classes = models.ManyToManyField(Class, related_name='students', blank=True)  # NEW: Link to classes
+    classes = models.ManyToManyField(Class, related_name='students', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     
     def __str__(self):
         return self.name
 
+# Helper function to get today's date (not datetime)
+def get_today():
+    return date.today()
+
 class AttendanceSession(models.Model):
     name = models.CharField(max_length=100)
-    date = models.DateField(default=timezone.now)
+    # FIXED: Use date.today instead of timezone.now for DateField
+    date = models.DateField(default=get_today)
     start_time = models.TimeField()
     end_time = models.TimeField(null=True, blank=True)
     teacher = models.ForeignKey(
@@ -59,14 +63,14 @@ class AttendanceSession(models.Model):
         related_name='sessions',
         null=True,
         blank=True
-    )  # NEW
+    )
     class_session = models.ForeignKey(
         'Class',
         on_delete=models.CASCADE,
-        related_name='sessions',  # ADD THIS LINE - This was missing!
+        related_name='sessions',
         null=True,
         blank=True
-    )  # NEW
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
