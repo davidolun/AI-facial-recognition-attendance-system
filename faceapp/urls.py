@@ -14,6 +14,9 @@ urlpatterns = [
     path('assign_student_to_class/', views.assign_student_to_class, name='assign_student_to_class'),
     path('get_all_students/', views.get_all_students, name='get_all_students'),
     path('remove_student_from_class/', views.remove_student_from_class, name='remove_student_from_class'),
+    path('advanced_analytics/', views.advanced_analytics, name='advanced_analytics'),
+    path('advanced_analytics_data/', views.advanced_analytics_data, name='advanced_analytics_data'),
+
     
     
     path('', views.home, name='home'),
