@@ -295,10 +295,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Contact
 
-**Developer**: [Your Name]
-- **Email**: your.email@example.com
-- **LinkedIn**: [Your LinkedIn Profile]
-- **GitHub**: [Your GitHub Profile]
+**Developer**: david olunloyo
+- **Email**: olunloyooladipupo@gmail.com
+- **LinkedIn**: linkedin.com/in/oladipupo-olunloyo-david/ 
+- **GitHub**: https://github.com/wavydipsS
 - **Portfolio**: [Your Portfolio Website]
 
 ---

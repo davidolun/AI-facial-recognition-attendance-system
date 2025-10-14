@@ -1,5 +1,7 @@
 import base64
 import re
+import time
+import logging
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
@@ -31,17 +33,29 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+# Set up loggers
+logger = logging.getLogger('faceapp')
+performance_logger = logging.getLogger('faceapp.performance')
+security_logger = logging.getLogger('faceapp.security')
+
 
 # Initialize OpenAI client with new API
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 @login_required
 def home(request):
-    return render(request, 'home.html')
+    start_time = time.time()
+    logger.info(f"User {request.user.username} accessed home page")
+    response = render(request, 'home.html')
+    performance_logger.info(f"Home page load time: {time.time() - start_time:.2f}s for user {request.user.username}")
+    return response
 
 
 @csrf_exempt
 def take_attendance(request):
+    start_time = time.time()
+    logger.info("Attendance taking request received")
+
     if request.method == "POST":
         try:
             import json, base64, re, datetime, os, face_recognition, cv2, numpy as np
@@ -49,6 +63,8 @@ def take_attendance(request):
             data = json.loads(request.body)
             image_data = data.get("image")
             if not image_data:
+                logger.warning("Attendance request failed: No image received")
+                performance_logger.info(f"Attendance request failed - no image: {time.time() - start_time:.2f}s")
                 return JsonResponse({"error": "No image received"}, status=400)
 
             # decode image
@@ -97,16 +113,26 @@ def take_attendance(request):
                     with open(log_path, "a") as f:
                         f.write(f"{name},{time_str},{date_str}\n")
 
+            processing_time = time.time() - start_time
+            performance_logger.info(f"Face recognition completed in {processing_time:.2f}s - recognized: {len(recognized)} students")
+            logger.info(f"Attendance taken successfully: {', '.join(recognized) if recognized else 'No match'}")
+
             return JsonResponse({"message": f"Attendance taken: {', '.join(recognized) if recognized else 'No match'}",
                                  "faces": faces_for_js})
 
         except Exception as e:
+            error_time = time.time() - start_time
+            logger.error(f"Attendance taking failed after {error_time:.2f}s: {str(e)}")
+            performance_logger.warning(f"Attendance processing error: {error_time:.2f}s - {str(e)}")
             return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse({"message": "Use POST request."})
 
 @login_required
 @csrf_exempt
 def add_student(request):
+    start_time = time.time()
+    logger.info(f"User {request.user.username} initiated student addition")
+
     if request.method == "POST":
         try:
             data = json.loads(request.body)
@@ -118,11 +144,14 @@ def add_student(request):
             class_ids = data.get("class_ids", [])  # NEW: Allow multiple class assignment
 
             if not student_name:
+                logger.warning(f"Student addition failed: No name provided by user {request.user.username}")
                 return JsonResponse({"error": "No name provided"}, status=400)
             if not image_data:
+                logger.warning(f"Student addition failed: No image provided by user {request.user.username}")
                 return JsonResponse({"error": "No image provided"}, status=400)
 
             if Student.objects.filter(name=student_name).exists():
+                logger.warning(f"Student addition failed: Student '{student_name}' already exists (user: {request.user.username})")
                 return JsonResponse({"error": f"Student '{student_name}' already exists"}, status=400)
 
             img_str = re.sub("^data:image/.+;base64,", "", image_data)
@@ -134,15 +163,16 @@ def add_student(request):
 
             face_locations = face_recognition.face_locations(rgb_frame)
             if not face_locations:
+                logger.warning(f"Student addition failed: No face detected for {student_name} (user: {request.user.username})")
                 return JsonResponse({"error": "No face detected. Please ensure your face is clearly visible."}, status=400)
 
             students_dir = os.path.join(settings.BASE_DIR, "students")
             os.makedirs(students_dir, exist_ok=True)
-            
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{student_name}_{timestamp}.jpg"
             save_path = os.path.join(students_dir, filename)
-            
+
             with open(save_path, "wb") as f:
                 f.write(img_bytes)
 
@@ -154,15 +184,21 @@ def add_student(request):
                 phone=phone if phone else None,
                 image_path=save_path
             )
-            
+
             # Assign to classes if provided
             if class_ids:
                 # Verify all classes belong to the logged-in teacher
                 teacher_classes = Class.objects.filter(id__in=class_ids, teacher=request.user)
                 if teacher_classes.count() != len(class_ids):
+                    logger.warning(f"Student addition failed: Invalid class permissions for user {request.user.username}")
                     return JsonResponse({"error": "Some classes not found or you do not have permission"}, status=400)
-                
+
                 student.classes.set(teacher_classes)
+                logger.info(f"Student {student_name} assigned to {len(teacher_classes)} classes by user {request.user.username}")
+
+            processing_time = time.time() - start_time
+            performance_logger.info(f"Student addition completed in {processing_time:.2f}s - {student_name} by user {request.user.username}")
+            logger.info(f"Student {student_name} added successfully by user {request.user.username}")
 
             return JsonResponse({
                 "message": f"Student {student_name} added successfully!",
@@ -170,6 +206,9 @@ def add_student(request):
             })
 
         except Exception as e:
+            error_time = time.time() - start_time
+            logger.error(f"Student addition failed after {error_time:.2f}s for user {request.user.username}: {str(e)}")
+            performance_logger.warning(f"Student addition error: {error_time:.2f}s - {str(e)}")
             print("ERROR in add_student:", e)
             return JsonResponse({"error": str(e)}, status=400)
 
@@ -577,6 +616,9 @@ Remember the conversation history to provide contextual responses. If someone as
 @login_required
 @csrf_exempt
 def ai_assistant(request):
+    start_time = time.time()
+    logger.info(f"AI assistant query from user {request.user.username}")
+
     if request.method == "POST":
         try:
             data = json.loads(request.body)
@@ -584,6 +626,7 @@ def ai_assistant(request):
             session_id = data.get("session_id", "default")
 
             if not user_query:
+                logger.warning(f"AI assistant query failed: No query provided by user {request.user.username}")
                 return JsonResponse({"error": "No query provided"}, status=400)
 
             # Pass teacher context for data filtering (unless admin)
@@ -595,6 +638,9 @@ def ai_assistant(request):
                 response_data = json.loads(ai_response)
                 if response_data.get("export_request"):
                     # Return JSON with export parameters for frontend to handle
+                    processing_time = time.time() - start_time
+                    performance_logger.info(f"AI export request processed in {processing_time:.2f}s for user {request.user.username}")
+                    logger.info(f"AI export request: {response_data.get('export_type')} by user {request.user.username}")
                     return JsonResponse({
                         "query": user_query,
                         "response": f"I'll generate a {response_data.get('export_type', 'excel').upper()} export for you. Click the download button below.",
@@ -611,6 +657,10 @@ def ai_assistant(request):
                 # Not an export request, return normal response
                 pass
 
+            processing_time = time.time() - start_time
+            performance_logger.info(f"AI query processed in {processing_time:.2f}s for user {request.user.username}")
+            logger.info(f"AI query completed: '{user_query[:50]}...' by user {request.user.username}")
+
             return JsonResponse({
                 "query": user_query,
                 "response": ai_response,
@@ -618,6 +668,9 @@ def ai_assistant(request):
             })
 
         except Exception as e:
+            error_time = time.time() - start_time
+            logger.error(f"AI assistant error after {error_time:.2f}s for user {request.user.username}: {str(e)}")
+            performance_logger.warning(f"AI assistant error: {error_time:.2f}s - {str(e)}")
             return JsonResponse({"error": str(e)}, status=400)
 
     return render(request, 'ai_assistant.html')
@@ -1081,7 +1134,11 @@ def dashboard(request):
     """
     Render the main dashboard page
     """
-    return render(request, 'dashboard.html')
+    start_time = time.time()
+    logger.info(f"User {request.user.username} accessed dashboard")
+    response = render(request, 'dashboard.html')
+    performance_logger.info(f"Dashboard load time: {time.time() - start_time:.2f}s for user {request.user.username}")
+    return response
 
 
 @login_required
@@ -1349,15 +1406,17 @@ def login_view(request):
             data = json.loads(request.body)
             username = data.get('username', '').strip()
             password = data.get('password', '').strip()
-            
+
             if not username or not password:
+                security_logger.warning(f"Login attempt failed: Missing credentials for username '{username}'")
                 return JsonResponse({'error': 'Please enter both username and password'}, status=400)
-            
+
             # Authenticate user
             user = authenticate(request, username=username, password=password)
-            
+
             if user is not None:
                 login(request, user)
+                logger.info(f"User {username} logged in successfully")
                 return JsonResponse({
                     'message': 'Login successful!',
                     'redirect': '/dashboard/',
@@ -1368,15 +1427,18 @@ def login_view(request):
                     }
                 })
             else:
+                security_logger.warning(f"Login attempt failed: Invalid credentials for username '{username}'")
                 return JsonResponse({'error': 'Invalid username or password'}, status=400)
-                
+
         except Exception as e:
+            security_logger.error(f"Login error: {str(e)}")
             return JsonResponse({'error': str(e)}, status=400)
     
     return render(request, 'auth/login.html')
 
 @login_required
 def logout_view(request):
+    logger.info(f"User {request.user.username} logged out")
     logout(request)
     return redirect('/login/')
 
