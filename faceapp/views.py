@@ -24,6 +24,12 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from .models import Teacher, Class
 from django.db import transaction
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 
 # Initialize OpenAI client with new API
@@ -472,14 +478,33 @@ You are responding to {teacher.get_full_name()} ({teacher.username}).
 This data is filtered to show only their classes and sessions.
 Department: {teacher.department or 'Not specified'}
 """
-    
+
+    # Create a summary of the data instead of full JSON to avoid token limits
+    data_summary = f"""
+ATTENDANCE SYSTEM SUMMARY:
+- Total Students: {data['total_students']}
+- Total Sessions: {data['total_sessions']}
+- Current Date: {data['today_date']}
+- Available Sessions: {', '.join(data['sessions_list'][:10])}{'...' if len(data['sessions_list']) > 10 else ''}
+- Available Dates: {', '.join(data['unique_dates'][:10])}{'...' if len(data['unique_dates']) > 10 else ''}
+
+STUDENT STATISTICS SUMMARY:
+{chr(10).join([f"- {name}: {stats['total_sessions_attended']} sessions attended ({stats['attendance_percentage']}%)"
+               for name, stats in list(data['student_statistics'].items())[:20]])}
+{'...' if len(data['student_statistics']) > 20 else ''}
+
+RECENT SESSIONS SUMMARY:
+{chr(10).join([f"- {session['name']} on {session['date']}: {len([r for r in data['all_attendance_records'] if r['session_id'] == session['id']])} attendees"
+               for session in data['all_sessions'][:10]])}
+{'...' if len(data['all_sessions']) > 10 else ''}
+"""
+
     system_prompt = f"""
-You are an advanced AI assistant for a student attendance tracking system. You have access to COMPLETE attendance data and can maintain conversation context.
+You are an advanced AI assistant for a student attendance tracking system. You have access to attendance data and can maintain conversation context.
 
 {teacher_info}
 
-COMPLETE ATTENDANCE DATABASE:
-{json.dumps(data, indent=2)}
+{data_summary}
 
 CAPABILITIES:
 - Track attendance, absences, late arrivals, and on-time arrivals
@@ -487,6 +512,18 @@ CAPABILITIES:
 - Analyze attendance patterns over time
 - Maintain conversation context (remember previous questions in this chat)
 - Answer detailed questions about specific dates, sessions, and students
+- Generate export files in CSV, Excel, or Word format based on user requests
+
+EXPORT CAPABILITIES:
+When users request to export data, return a JSON response with the following structure:
+{{
+    "export_request": true,
+    "export_type": "csv|excel|word",
+    "date_from": "YYYY-MM-DD" (optional),
+    "date_to": "YYYY-MM-DD" (optional),
+    "title": "Custom Report Title" (optional),
+    "description": "Brief description of what will be exported"
+}}
 
 IMPORTANT INSTRUCTIONS:
 1. When asked about absences, check the 'absent_students' list in session_details
@@ -495,13 +532,10 @@ IMPORTANT INSTRUCTIONS:
 4. Maintain conversation context - if someone asks "who was absent" after asking about a specific session, refer to that same session
 5. Be precise with numbers and always show your reasoning
 6. If you're responding to a teacher, remember this data is specific to their classes only
+7. For export requests, use the exact JSON format above - do not add extra text
 
 CONVERSATION CONTEXT:
 Remember the conversation history to provide contextual responses. If someone asks a follow-up question without specifying details, use the context from previous messages.
-
-Current date: {data['today_date']}
-Total students in system: {data['total_students']}
-Total sessions in system: {data['total_sessions']}
 """
 
     try:
@@ -538,23 +572,44 @@ def ai_assistant(request):
             data = json.loads(request.body)
             user_query = data.get("query", "").strip()
             session_id = data.get("session_id", "default")
-            
+
             if not user_query:
                 return JsonResponse({"error": "No query provided"}, status=400)
-            
+
             # Pass teacher context for data filtering (unless admin)
             teacher = None if request.user.is_admin else request.user
             ai_response = query_attendance_data_with_context(user_query, session_id, teacher)
-            
+
+            # Check if AI response is an export request
+            try:
+                response_data = json.loads(ai_response)
+                if response_data.get("export_request"):
+                    # Return JSON with export parameters for frontend to handle
+                    return JsonResponse({
+                        "query": user_query,
+                        "response": f"I'll generate a {response_data.get('export_type', 'excel').upper()} export for you. Click the download button below.",
+                        "session_id": session_id,
+                        "export_request": {
+                            "type": response_data.get("export_type", "excel"),
+                            "date_from": response_data.get("date_from"),
+                            "date_to": response_data.get("date_to"),
+                            "title": response_data.get("title", "Attendance Report")
+                        }
+                    })
+
+            except (json.JSONDecodeError, KeyError):
+                # Not an export request, return normal response
+                pass
+
             return JsonResponse({
                 "query": user_query,
                 "response": ai_response,
                 "session_id": session_id
             })
-            
+
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
-    
+
     return render(request, 'ai_assistant.html')
 
 
@@ -1019,51 +1074,198 @@ def dashboard(request):
     return render(request, 'dashboard.html')
 
 
+@login_required
 @csrf_exempt
 def export_data(request):
     """
-    Export attendance data in various formats
+    Export attendance data in various formats (CSV, Excel, Word)
     """
     if request.method == "POST":
         try:
             data = json.loads(request.body)
-            export_type = data.get("type", "csv")  # csv, excel, pdf
+            export_type = data.get("type", "csv")  # csv, excel, word
             date_from = data.get("date_from")
             date_to = data.get("date_to")
-            
-            # Get filtered data
-            attendance_data = get_complete_attendance_data()
-            
-            if export_type == "csv":
-                # Create CSV content
-                import csv
-                from io import StringIO
-                
-                output = StringIO()
-                writer = csv.writer(output)
-                
-                # Write headers
-                writer.writerow(['Student Name', 'Session', 'Date', 'Time', 'Status', 'Late'])
-                
-                # Write data
-                for record in attendance_data['all_attendance_records']:
-                    writer.writerow([
-                        record['student__name'],
-                        record['session__name'] if record['session__name'] else 'N/A',
-                        record['date'],
-                        record['time'],
-                        'Present',
-                        'Yes' if record['is_late'] else 'No'
-                    ])
-                
-                response = HttpResponse(output.getvalue(), content_type='text/csv')
-                response['Content-Disposition'] = 'attachment; filename="attendance_data.csv"'
-                return response
-                
+            report_title = data.get("title", "Attendance Report")
+
+            # Get filtered data (by teacher if not admin)
+            teacher = None if request.user.is_admin else request.user
+
+            return generate_export_file(export_type, date_from, date_to, report_title, teacher)
+
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
-    
+
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+def generate_export_file(export_type, date_from=None, date_to=None, report_title="Attendance Report", teacher=None):
+    """
+    Helper function to generate export files with given parameters
+    """
+    # Get filtered data (by teacher if provided)
+    attendance_data = get_complete_attendance_data(teacher)
+
+    # Filter by date range if provided
+    if date_from and date_to:
+        from datetime import datetime
+        date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+        date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+
+        attendance_data['all_attendance_records'] = [
+            record for record in attendance_data['all_attendance_records']
+            if date_from_obj <= datetime.strptime(record['date'], '%Y-%m-%d').date() <= date_to_obj
+        ]
+
+    if export_type == "csv":
+        # Create CSV content
+        import csv
+        from io import StringIO
+
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write headers
+        writer.writerow(['Student Name', 'Session', 'Date', 'Time', 'Status', 'Late'])
+
+        # Write data
+        for record in attendance_data['all_attendance_records']:
+            writer.writerow([
+                record['student__name'],
+                record['session__name'] if record['session__name'] else 'N/A',
+                record['date'],
+                record['time'],
+                'Present',
+                'Yes' if record['is_late'] else 'No'
+            ])
+
+        response = HttpResponse(output.getvalue(), content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{report_title}.csv"'
+        return response
+
+    elif export_type == "excel":
+        # Create Excel file
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Attendance Report"
+
+        # Title
+        ws['A1'] = report_title
+        ws['A1'].font = Font(size=16, bold=True)
+        ws.merge_cells('A1:F1')
+
+        # Headers
+        headers = ['Student Name', 'Session', 'Date', 'Time', 'Status', 'Late']
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col_num)
+            cell.value = header
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+
+        # Data
+        for row_num, record in enumerate(attendance_data['all_attendance_records'], 4):
+            ws.cell(row=row_num, column=1).value = record['student__name']
+            ws.cell(row=row_num, column=2).value = record['session__name'] if record['session__name'] else 'N/A'
+            ws.cell(row=row_num, column=3).value = record['date']
+            ws.cell(row=row_num, column=4).value = record['time']
+            ws.cell(row=row_num, column=5).value = 'Present'
+            ws.cell(row=row_num, column=6).value = 'Yes' if record['is_late'] else 'No'
+
+        # Auto-adjust column widths
+        for col_num, column in enumerate(ws.columns, 1):
+            max_length = 0
+            column_letter = get_column_letter(col_num)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2)
+            ws.column_dimensions[column_letter].width = adjusted_width
+
+        # Save to response
+        from io import BytesIO
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{report_title}.xlsx"'
+        return response
+
+    elif export_type == "word":
+        # Create Word document
+        doc = Document()
+
+        # Title
+        title = doc.add_heading(report_title, 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Add summary
+        doc.add_paragraph(f"Total Students: {attendance_data['total_students']}")
+        doc.add_paragraph(f"Total Sessions: {attendance_data['total_sessions']}")
+        doc.add_paragraph(f"Total Records: {len(attendance_data['all_attendance_records'])}")
+        doc.add_paragraph("")
+
+        # Create table
+        table = doc.add_table(rows=1, cols=6)
+        table.style = 'Table Grid'
+
+        # Headers
+        header_cells = table.rows[0].cells
+        headers = ['Student Name', 'Session', 'Date', 'Time', 'Status', 'Late']
+        for i, header in enumerate(headers):
+            header_cells[i].text = header
+            header_cells[i].paragraphs[0].runs[0].font.bold = True
+
+        # Data
+        for record in attendance_data['all_attendance_records']:
+            row_cells = table.add_row().cells
+            row_cells[0].text = record['student__name']
+            row_cells[1].text = record['session__name'] if record['session__name'] else 'N/A'
+            row_cells[2].text = record['date']
+            row_cells[3].text = record['time']
+            row_cells[4].text = 'Present'
+            row_cells[5].text = 'Yes' if record['is_late'] else 'No'
+
+        # Add student statistics section
+        doc.add_page_break()
+        doc.add_heading('Student Statistics', level=1)
+
+        stats_table = doc.add_table(rows=1, cols=4)
+        stats_table.style = 'Table Grid'
+
+        # Stats headers
+        stats_header_cells = stats_table.rows[0].cells
+        stats_headers = ['Student Name', 'Sessions Attended', 'Late Count', 'Attendance %']
+        for i, header in enumerate(stats_headers):
+            stats_header_cells[i].text = header
+            stats_header_cells[i].paragraphs[0].runs[0].font.bold = True
+
+        # Stats data
+        for student_name, stats in attendance_data['student_statistics'].items():
+            row_cells = stats_table.add_row().cells
+            row_cells[0].text = student_name
+            row_cells[1].text = str(stats['total_sessions_attended'])
+            row_cells[2].text = str(stats['times_late'])
+            row_cells[3].text = f"{stats['attendance_percentage']}%"
+
+        # Save to response
+        from io import BytesIO
+        output = BytesIO()
+        doc.save(output)
+        output.seek(0)
+
+        response = HttpResponse(
+            output.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{report_title}.docx"'
+        return response
 
 
 

@@ -50,24 +50,30 @@
         }
 
         .nav-links {
+            margin-bottom: 1.5rem;
             display: flex;
             gap: 1rem;
             flex-wrap: wrap;
         }
 
-        .nav-link {
-            color: var(--primary);
+        .nav-links a {
+            color: #3b82f6;
             text-decoration: none;
             padding: 0.5rem 1rem;
             border-radius: 8px;
-            border: 1px solid var(--border);
+            border: 1px solid #374151;
             transition: all 0.2s;
             font-size: 0.9rem;
         }
 
-        .nav-link:hover, .nav-link.active {
-            background: var(--border);
-            border-color: var(--primary);
+        .nav-links a:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+
+        .nav-links a.active {
+            background: #1f2937;
+            border-color: #3b82f6;
         }
 
         h1 {
@@ -542,11 +548,12 @@
                 <p class="subtitle">AI-Powered Insights & Predictions</p>
             </div>
             <div class="nav-links">
-                <a href="/" class="nav-link">Take Attendance</a>
-                <a href="/add_student/" class="nav-link">Add Student</a>
-                <a href="/dashboard/" class="nav-link">Dashboard</a>
-                <a href="/ai_assistant/" class="nav-link">AI Assistant</a>
-                <a href="#" class="nav-link active">Advanced Analytics</a>
+                <a href="/">📷 Take Attendance</a>
+                <a href="/add_student/">👤 Add Student</a>
+                <a href="/dashboard/">📊 View Records</a>
+                <a href="/advanced_analytics/" style="background: #1f2937; border-color: #3b82f6;">📈 Advanced Analytics</a>
+                <a href="/class_management/">👥 Class Management</a>
+                <a href="/ai_assistant/">🤖 AI Assistant</a>
             </div>
         </div>
 
@@ -703,37 +710,7 @@
                 </div>
             </div>
 
-            <div class="chart-card">
-                <div class="chart-header">
-                    <div>
-                        <h3 class="chart-title">Correlation Matrix</h3>
-                        <p class="chart-subtitle">Feature importance and relationships</p>
-                    </div>
-                    <div class="chart-actions">
-                        <button class="chart-btn" onclick="exportChart('correlation')">📊</button>
-                        <button class="chart-btn" onclick="refreshCorrelation()">🔄</button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="correlationChart"></canvas>
-                </div>
-            </div>
 
-            <div class="chart-card">
-                <div class="chart-header">
-                    <div>
-                        <h3 class="chart-title">Performance Metrics</h3>
-                        <p class="chart-subtitle">Model accuracy and validation scores</p>
-                    </div>
-                    <div class="chart-actions">
-                        <button class="chart-btn" onclick="exportChart('performance')">📊</button>
-                        <button class="chart-btn" onclick="refreshPerformance()">🔄</button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="performanceChart"></canvas>
-                </div>
-            </div>
         </div>
 
         <div class="risk-matrix">
@@ -807,24 +784,27 @@
                 // Fetch real analytics data from the API
                 analyticsData = await fetchAnalyticsData();
                 console.log('Analytics data loaded:', Object.keys(analyticsData));
-                
+
                 // Initialize ML components
                 await initializeMachineLearning();
-                
+
+                // Update prediction stats with real data
+                updatePredictionStats();
+
                 // Create all charts
                 createAllCharts();
-                
+
                 // Generate insights
                 generateInsights();
-                
+
                 // Update risk assessments
                 updateRiskAssessment();
-                
+
                 // Populate filter dropdowns with real data
                 populateFilters();
-                
+
                 console.log('Advanced analytics initialization complete');
-                
+
             } catch (error) {
                 console.error('Failed to initialize analytics:', error);
                 showError('Failed to load advanced analytics: ' + error.message);
@@ -1167,29 +1147,41 @@
 
         function updatePredictionStats() {
             if (!analyticsData) return;
-            
+
             // Calculate real statistics from data
             const totalStudents = analyticsData.students.length;
             const totalRecords = analyticsData.records.length;
-            
+
             // Calculate average attendance rate
             let avgAttendance = 0;
             if (analyticsData.studentStats && Object.keys(analyticsData.studentStats).length > 0) {
                 const attendanceRates = Object.values(analyticsData.studentStats).map(s => s.attendance_percentage);
                 avgAttendance = attendanceRates.reduce((a, b) => a + b, 0) / attendanceRates.length;
             }
-            
+
             // Count at-risk students (attendance < 70%)
             let riskStudents = 0;
             if (analyticsData.studentStats) {
                 riskStudents = Object.values(analyticsData.studentStats).filter(s => s.attendance_percentage < 70).length;
             }
-            
+
+            // Calculate week-over-week change in at-risk students
+            const riskChange = calculateRiskStudentsChange();
+
             // Update UI with real data
             document.getElementById('predictionAccuracy').textContent = '94.2%'; // This would be calculated from ML model
             document.getElementById('riskStudents').textContent = riskStudents;
             document.getElementById('avgAttendance').textContent = avgAttendance.toFixed(1) + '%';
-            
+
+            // Update the risk students change indicator
+            const riskChangeElement = document.querySelector('#riskStudents').parentElement.querySelector('.stat-change');
+            if (riskChangeElement) {
+                const changeText = riskChange > 0 ? `+${riskChange}` : riskChange.toString();
+                const changeClass = riskChange > 0 ? 'negative' : riskChange < 0 ? 'positive' : '';
+                riskChangeElement.textContent = `${changeText} from last week`;
+                riskChangeElement.className = `stat-change ${changeClass}`;
+            }
+
             // Update ML indicators with data quality score
             const dataQuality = analyticsData.analytics?.data_quality_score || 0.85;
             document.getElementById('modelConfidence').textContent = '94%';
@@ -1198,13 +1190,57 @@
             document.getElementById('trendStrength').textContent = (0.75 + Math.random() * 0.2).toFixed(2);
         }
 
+        function calculateRiskStudentsChange() {
+            if (!analyticsData || !analyticsData.records || !analyticsData.students) return 0;
+
+            const now = new Date();
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+            // Calculate at-risk students for current week (last 7 days)
+            const currentWeekRisk = analyticsData.students.filter(studentName => {
+                const studentRecords = analyticsData.records.filter(r =>
+                    r.student__name === studentName &&
+                    new Date(r.date) >= oneWeekAgo
+                );
+
+                if (studentRecords.length === 0) return false;
+
+                // Calculate attendance rate for current week
+                const uniqueSessions = new Set(studentRecords.map(r => r.session__name)).size;
+                const totalPossibleSessions = Math.max(1, analyticsData.classes.length * 7); // Rough estimate for a week
+                const attendanceRate = (uniqueSessions / totalPossibleSessions) * 100;
+
+                return attendanceRate < 70;
+            }).length;
+
+            // Calculate at-risk students for previous week (8-14 days ago)
+            const previousWeekRisk = analyticsData.students.filter(studentName => {
+                const studentRecords = analyticsData.records.filter(r =>
+                    r.student__name === studentName &&
+                    new Date(r.date) >= twoWeeksAgo &&
+                    new Date(r.date) < oneWeekAgo
+                );
+
+                if (studentRecords.length === 0) return false;
+
+                // Calculate attendance rate for previous week
+                const uniqueSessions = new Set(studentRecords.map(r => r.session__name)).size;
+                const totalPossibleSessions = Math.max(1, analyticsData.classes.length * 7); // Rough estimate for a week
+                const attendanceRate = (uniqueSessions / totalPossibleSessions) * 100;
+
+                return attendanceRate < 70;
+            }).length;
+
+            return currentWeekRisk - previousWeekRisk;
+        }
+
         function createAllCharts() {
             createPredictionChart();
             createRiskChart();
             createPatternChart();
             createTimeSeriesChart();
-            createCorrelationChart();
-            createPerformanceChart();
+
         }
 
         function createPredictionChart() {
@@ -1403,10 +1439,9 @@
             // Calculate real risk scores from attendance data
             const riskData = calculateRiskScores();
             
-            // Sort by risk score (highest first) and take top 10
+            // Sort by risk score (highest first) - show all students
             const topRiskStudents = riskData
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 10);
+                .sort((a, b) => b.score - a.score);
             
             const students = topRiskStudents.map(s => s.name.split(' ')[0]); // First names only
             const riskScores = topRiskStudents.map(s => s.score);
@@ -1813,180 +1848,7 @@
             return result;
         }
 
-        function createCorrelationChart() {
-            const ctx = document.getElementById('correlationChart');
-            if (!ctx) return;
-            
-            if (charts.correlation) {
-                charts.correlation.destroy();
-            }
-            
-            // Generate correlation matrix data
-            const features = ['Day of Week', 'Time of Day', 'Weather', 'Previous Attendance', 'Student Grade'];
-            const correlations = [];
-            
-            for (let i = 0; i < features.length; i++) {
-                for (let j = 0; j < features.length; j++) {
-                    let value;
-                    if (i === j) {
-                        value = 1; // Perfect correlation with self
-                    } else {
-                        value = (Math.random() - 0.5) * 2; // Random correlation between -1 and 1
-                        // Make some correlations more realistic
-                        if ((i === 3 && j === 4) || (i === 4 && j === 3)) {
-                            value = 0.7 + Math.random() * 0.2; // Strong positive correlation
-                        }
-                    }
-                    
-                    correlations.push({
-                        x: j,
-                        y: features.length - 1 - i,
-                        value: value
-                    });
-                }
-            }
-            
-            charts.correlation = new Chart(ctx, {
-                type: 'scatter',
-                data: {
-                    datasets: [{
-                        label: 'Correlation',
-                        data: correlations,
-                        backgroundColor: function(context) {
-                            const value = context.parsed.value || 0;
-                            const intensity = Math.abs(value);
-                            const hue = value > 0 ? 120 : 0; // Green for positive, red for negative
-                            return `hsla(${hue}, 70%, 50%, ${0.3 + intensity * 0.7})`;
-                        },
-                        borderColor: function(context) {
-                            const value = context.parsed.value || 0;
-                            const hue = value > 0 ? 120 : 0;
-                            return `hsl(${hue}, 70%, 40%)`;
-                        },
-                        pointRadius: 15,
-                        pointHoverRadius: 18
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                            titleColor: '#e5e7eb',
-                            bodyColor: '#e5e7eb',
-                            borderColor: '#374151',
-                            borderWidth: 1,
-                            callbacks: {
-                                title: function(context) {
-                                    const point = context[0];
-                                    return `${features[point.parsed.x]} vs ${features[features.length - 1 - point.parsed.y]}`;
-                                },
-                                label: function(context) {
-                                    return `Correlation: ${context.parsed.value.toFixed(3)}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            min: -0.5,
-                            max: features.length - 0.5,
-                            ticks: {
-                                stepSize: 1,
-                                callback: function(value, index) {
-                                    return features[features.length - 1 - value] || '';
-                                },
-                                color: '#9ca3af'
-                            },
-                            grid: { display: false }
-                        },
-                        x: {
-                            type: 'linear',
-                            min: -0.5,
-                            max: features.length - 0.5,
-                            ticks: {
-                                stepSize: 1,
-                                callback: function(value, index) {
-                                    return features[value] || '';
-                                },
-                                color: '#9ca3af'
-                            },
-                            grid: { display: false }
-                        }
-                    }
-                }
-            });
-        }
 
-        function createPerformanceChart() {
-            const ctx = document.getElementById('performanceChart');
-            if (!ctx) return;
-            
-            if (charts.performance) {
-                charts.performance.destroy();
-            }
-            
-            // Generate model performance metrics
-            const metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'AUC-ROC'];
-            const values = [0.94, 0.92, 0.89, 0.91, 0.93];
-            const colors = values.map(val => {
-                if (val > 0.9) return 'rgba(34, 197, 94, 0.8)';
-                if (val > 0.8) return 'rgba(59, 130, 246, 0.8)';
-                return 'rgba(245, 158, 11, 0.8)';
-            });
-            
-            charts.performance = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: metrics,
-                    datasets: [{
-                        label: 'Model Performance',
-                        data: values,
-                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                        borderColor: 'rgb(59, 130, 246)',
-                        borderWidth: 3,
-                        pointBackgroundColor: colors,
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            labels: { color: '#e5e7eb' }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                            titleColor: '#e5e7eb',
-                            bodyColor: '#e5e7eb',
-                            borderColor: '#374151',
-                            borderWidth: 1
-                        }
-                    },
-                    scales: {
-                        r: {
-                            beginAtZero: true,
-                            max: 1,
-                            grid: { color: '#374151' },
-                            angleLines: { color: '#374151' },
-                            pointLabels: { color: '#9ca3af' },
-                            ticks: { 
-                                color: '#9ca3af',
-                                stepSize: 0.2
-                            }
-                        }
-                    }
-                }
-            });
-        }
 
         function generateInsights() {
             if (!analyticsData) return;
@@ -2207,7 +2069,7 @@
                 return;
             }
             
-            container.innerHTML = students.slice(0, 5).map(student => `
+            container.innerHTML = students.map(student => `
                 <div class="student-item">
                     <span class="student-name">${student.name}</span>
                     <span class="risk-score ${riskClass}">${Math.round(student.score)}%</span>
@@ -2243,13 +2105,7 @@
             createTimeSeriesChart();
         }
 
-        function refreshCorrelation() {
-            createCorrelationChart();
-        }
 
-        function refreshPerformance() {
-            createPerformanceChart();
-        }
 
         function showError(message) {
             const alertDiv = document.createElement('div');

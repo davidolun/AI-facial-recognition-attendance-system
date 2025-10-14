@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Webcam Attendance</title>
   <style>
-    :root { --w: 720px; }
+    :root { --w: 1200px; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0e13; color:#e5e7eb; margin:0; padding:2rem; }
     h1 { margin: 0 0 1rem; font-size: 1.8rem; font-weight: 600; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .wrap { max-width: var(--w); margin: 0 auto; }
@@ -190,17 +190,20 @@
 <body>
   <div class="wrap">
     <div class="nav-links">
+      {% if user.is_authenticated %}
+      <span style="font-size: 1.2rem; font-weight: 600; color: #3b82f6;">Welcome, {{ user.get_full_name }}</span>
+      {% endif %}
       <a href="/" style="background: #1f2937; border-color: #3b82f6;">📷 Take Attendance</a>
       <a href="/add_student/">👤 Add Student</a>
       <a href="/dashboard/">📊 View Records</a>
+      <a href="/advanced_analytics/">📈 Advanced Analytics</a>
+      <a href="/class_management/">👥 Class Management</a>
       <a href="/ai_assistant/">🤖 AI Assistant</a>
       {% if user.is_authenticated %}
-    <span>Welcome, {{ user.get_full_name }}</span>
-    <a href="/class_management/">Manage Classes</a>
-    <a href="/logout/">Logout</a>
+      <a href="/logout/">Logout</a>
 {% else %}
-    <a href="/login/">Login</a>
-    <a href="/signup/">Sign Up</a>
+      <a href="/login/">Login</a>
+      <a href="/signup/">Sign Up</a>
 {% endif %}
     </div>
     

@@ -78,6 +78,33 @@
             margin: 2rem auto;
             padding: 0 1rem;
         }
+
+        .nav-links {
+            margin-bottom: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-links a {
+            color: #3b82f6;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 1px solid #374151;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .nav-links a:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+
+        .nav-links a.active {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
         
         .nav-tabs {
             display: flex;
@@ -478,6 +505,14 @@
     </div>
     
     <div class="container">
+        <div class="nav-links" style="margin-bottom: 1.5rem;">
+            <a href="/" class="nav-link">📷 Take Attendance</a>
+            <a href="/add_student/" class="nav-link">👤 Add Student</a>
+            <a href="/dashboard/" class="nav-link">📊 View Records</a>
+            <a href="/advanced_analytics/" class="nav-link">📈 Advanced Analytics</a>
+            <a href="/class_management/" class="nav-link active">👥 Class Management</a>
+            <a href="/ai_assistant/" class="nav-link">🤖 AI Assistant</a>
+        </div>
         <div class="nav-tabs">
             <button class="nav-tab active" data-tab="classes">My Classes</button>
             <button class="nav-tab" data-tab="create">Create Class</button>

@@ -124,7 +124,12 @@ pip install -r requirements.txt
 ```
 
 ### 4. Environment Configuration
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (copy from `.env.example`):
+```bash
+cp .env.example .env
+```
+
+Then edit the `.env` file with your actual values:
 ```env
 SECRET_KEY=your-django-secret-key-here
 DEBUG=True
@@ -132,6 +137,8 @@ DATABASE_URL=sqlite:///db.sqlite3  # Or PostgreSQL URL
 OPENAI_API_KEY=your-openai-api-key-here
 ALLOWED_HOSTS=localhost,127.0.0.1
 ```
+
+**⚠️ Security Note:** Never commit your `.env` file to version control. It's already included in `.gitignore`.
 
 ### 5. Database Setup
 ```bash

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>AI Attendance Assistant</title>
     <style>
-        :root { --w: 800px; }
+        :root { --w: 1200px; }
         body { 
             font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; 
             background: #0b0e13; 
@@ -167,9 +167,9 @@
             margin-bottom: 1.5rem;
             display: flex;
             gap: 1rem;
-            align-items: center;
+            flex-wrap: wrap;
         }
-        
+
         .nav-links a {
             color: #3b82f6;
             text-decoration: none;
@@ -177,9 +177,15 @@
             border-radius: 8px;
             border: 1px solid #374151;
             transition: all 0.2s;
+            font-size: 0.9rem;
         }
-        
+
         .nav-links a:hover {
+            background: #1f2937;
+            border-color: #3b82f6;
+        }
+
+        .nav-links a.active {
             background: #1f2937;
             border-color: #3b82f6;
         }
@@ -216,6 +222,8 @@
             <a href="/">📷 Take Attendance</a>
             <a href="/add_student/">👤 Add Student</a>
             <a href="/dashboard/">📊 View Records</a>
+            <a href="/advanced_analytics/">📈 Advanced Analytics</a>
+            <a href="/class_management/">👥 Class Management</a>
             <a href="/ai_assistant/" style="background: #1f2937; border-color: #3b82f6;">🤖 AI Assistant</a>
             <button class="clear-btn" onclick="clearConversation()">Clear Chat</button>
         </div>
@@ -355,7 +363,17 @@
                 if (response.ok) {
                     // Format and add AI response with enhanced styling
                     const formattedResponse = formatAIResponse(data.response);
-                    addMessage(formattedResponse);
+                    const messageDiv = addMessage(formattedResponse);
+
+                    // Check if this is an export request and add download button
+                    if (data.export_request) {
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.textContent = `📥 Download ${data.export_request.type.toUpperCase()} Report`;
+                        downloadBtn.className = 'send-btn';
+                        downloadBtn.style.marginTop = '0.5rem';
+                        downloadBtn.onclick = () => downloadExport(data.export_request);
+                        messageDiv.appendChild(downloadBtn);
+                    }
                 } else {
                     addMessage(`❌ Error: ${data.error || 'Something went wrong'}`);
                 }
@@ -415,6 +433,44 @@
             this.style.height = 'auto';
             this.style.height = this.scrollHeight + 'px';
         });
+
+        async function downloadExport(exportRequest) {
+            try {
+                const response = await fetch('/export_data/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(exportRequest)
+                });
+
+                if (response.ok) {
+                    // Get the blob and create a download link
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+
+                    // Set filename based on export type
+                    const extension = exportRequest.type === 'excel' ? 'xlsx' :
+                                    exportRequest.type === 'word' ? 'docx' : 'csv';
+                    const filename = `${exportRequest.title || 'Attendance_Report'}.${extension}`;
+                    a.download = filename;
+
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                } else {
+                    const errorData = await response.json();
+                    alert(`Export failed: ${errorData.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert(`Export error: ${error.message}`);
+            }
+        }
 
         // Focus input on load
         queryInput.focus();

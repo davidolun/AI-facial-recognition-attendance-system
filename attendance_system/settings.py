@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,10 +25,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-6hl+$od6d=rkb#neuhyg4r1v48(eoo3#nu)@gzi9%jby5bs8jx'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 
 # OpenAI API Key
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 
 
 # Custom User Model
@@ -50,15 +54,14 @@ SESSION_SAVE_EVERY_REQUEST = True
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # For development with ngrok
 CSRF_TRUSTED_ORIGINS = [
-    'https://knightly-sherril-dynamometric.ngrok-free.dev',  # Replace with your actual ngrok domain
+    origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'https://knightly-sherril-dynamometric.ngrok-free.dev').split(',') if origin.strip()
 ]
 
-
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.8','0.0.0.0','knightly-sherril-dynamometric.ngrok-free.dev',]
+ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.1.8,0.0.0.0').split(',') if host.strip()]
 
 # Application definition
 
@@ -105,12 +108,27 @@ WSGI_APPLICATION = 'attendance_system.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+
+if DATABASE_URL.startswith('sqlite:///'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / DATABASE_URL.replace('sqlite:///', ''),
+        }
     }
-}
+elif DATABASE_URL.startswith('postgresql://'):
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL)
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
