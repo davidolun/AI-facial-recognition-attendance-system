@@ -15,6 +15,7 @@ A cutting-edge, full-stack attendance tracking system that leverages computer vi
 - **Intelligent Assistant**: OpenAI GPT-4o-mini integration for natural language queries
 - **Multi-User Architecture**: Role-based access for teachers and administrators
 - **Advanced Visualizations**: Interactive charts with Chart.js and D3.js
+- **Comprehensive Logging**: Production-ready logging system with performance monitoring and security tracking
 - **Production-Ready**: Scalable design with proper error handling and security
 
 ## 🏗️ Architecture Overview
@@ -62,6 +63,8 @@ A cutting-edge, full-stack attendance tracking system that leverages computer vi
 - **Deployment**: Docker-ready configuration
 - **Version Control**: Git
 - **Package Management**: pip, requirements.txt
+- **Logging**: Comprehensive logging with performance and security monitoring
+- **Security**: Production-ready security configurations with HTTPS enforcement
 
 ## ✨ Features
 
@@ -95,6 +98,13 @@ A cutting-edge, full-stack attendance tracking system that leverages computer vi
 - **Real-time Updates**: Live data refresh with AJAX calls
 - **Export Functionality**: CSV export for reporting and analysis
 - **Responsive Design**: Optimized for desktop and mobile devices
+- **Clean Interface**: Removed demo mode indicators for production use
+
+### 🔐 Security & Monitoring
+- **Comprehensive Logging**: Performance, security, and application logs
+- **Production Security**: HTTPS enforcement, secure headers, CSRF protection
+- **Input Validation**: Sanitized file uploads and user inputs
+- **Authentication Security**: Secure session management and password policies
 
 ## 📋 Prerequisites
 
@@ -150,6 +160,7 @@ python manage.py createsuperuser
 ```bash
 mkdir -p students  # For student images
 mkdir -p media    # For uploaded files
+mkdir -p logs     # For application logs
 ```
 
 ### 7. Run Development Server
@@ -176,11 +187,16 @@ Visit `http://localhost:8000` in your browser.
 
 ### Key Endpoints
 - `/` - Home page with attendance taking
-- `/dashboard/` - Main analytics dashboard
-- `/advanced_analytics/` - ML-powered insights
+- `/dashboard/` - Main analytics dashboard (demo mode removed)
+- `/advanced_analytics/` - ML-powered insights (correlation matrix and performance metrics removed)
 - `/ai_assistant/` - Natural language queries
 - `/class_management/` - Teacher class management
 - `/admin/` - Django admin interface
+
+### Log Files
+- `logs/attendance_system.log` - General application logs
+- `logs/performance.log` - Performance monitoring and timing
+- `logs/security.log` - Security events and authentication logs
 
 ## 🔧 API Documentation
 
@@ -262,9 +278,12 @@ docker run -p 8000:8000 attendance-system
 ### Production Considerations
 - Use PostgreSQL for database
 - Configure static file serving (nginx/Apache)
-- Set up SSL certificates
-- Implement proper logging and monitoring
+- Set up SSL certificates and HTTPS enforcement
+- Implement comprehensive logging and monitoring (already configured)
 - Configure backup strategies
+- Set secure environment variables (DEBUG=False, strong SECRET_KEY)
+- Configure ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for production domain
+- Enable security headers (HSTS, XSS protection, etc.)
 
 ## 🤝 Contributing
 
@@ -298,8 +317,25 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Developer**: david olunloyo
 - **Email**: olunloyooladipupo@gmail.com
 - **LinkedIn**: linkedin.com/in/oladipupo-olunloyo-david/ 
-- **GitHub**: https://github.com/wavydipsS
+- **GitHub**: https://github.com/wavydips
 - **Portfolio**: [Your Portfolio Website]
+
+## 📋 Recent Updates
+
+### Version 2.1.0 - Production Security & Logging Enhancement
+- ✅ **Comprehensive Logging System**: Added performance monitoring, security logging, and application tracking
+- ✅ **Production Security**: Implemented HTTPS enforcement, secure headers, and CSRF protection
+- ✅ **UI Cleanup**: Removed demo mode indicators from dashboard for production use
+- ✅ **Analytics Optimization**: Streamlined advanced analytics by removing unused correlation matrix and performance metrics
+- ✅ **Security Hardening**: Enhanced authentication security and input validation
+- ✅ **Documentation Update**: Updated README with all security and logging features
+
+### Security Features Added
+- **Logging Infrastructure**: Multi-level logging with separate files for performance, security, and general logs
+- **HTTPS Enforcement**: Automatic SSL redirection and secure cookie settings
+- **Security Headers**: XSS protection, content type sniffing prevention, frame options
+- **Input Validation**: Enhanced file upload security and user input sanitization
+- **Session Security**: HTTPOnly cookies, SameSite protection, and secure session management
 
 ---
 
