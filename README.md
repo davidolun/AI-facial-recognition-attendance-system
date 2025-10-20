@@ -118,7 +118,7 @@ A cutting-edge, full-stack attendance tracking system that leverages computer vi
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/attendance-system.git
+git clone https://github.com/wavydips/AI-facial-recognition-attendance-system
 cd attendance-system
 ```
 

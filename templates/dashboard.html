@@ -1177,24 +1177,6 @@
                 }
             }
             
-            // Add a test button to verify data is working
-            const testButton = document.createElement('button');
-            testButton.textContent = '🔍 Test Filter Data';
-            testButton.className = 'btn';
-            testButton.style.marginLeft = '10px';
-            testButton.onclick = function() {
-                console.log('=== FILTER TEST ===');
-                console.log('Sessions available:', dashboardData.sessions_list);
-                console.log('Records count:', dashboardData.all_attendance_records?.length);
-                console.log('Sample records:', dashboardData.all_attendance_records?.slice(0, 3));
-                console.log('Unique sessions in records:', [...new Set(dashboardData.all_attendance_records?.map(r => r.session__name) || [])]);
-                console.log('Unique dates in records:', [...new Set(dashboardData.all_attendance_records?.map(r => r.date) || [])]);
-                alert('Check console for detailed filter data');
-            };
-            
-            // Add test button after refresh button
-            const refreshButton = document.querySelector('.primary-btn');
-            refreshButton.parentNode.appendChild(testButton);
         }
 
         function updateSessionData() {

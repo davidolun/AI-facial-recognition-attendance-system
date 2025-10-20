@@ -145,6 +145,25 @@
     .primary-btn:hover:not(:disabled) {
       background: #2563eb;
     }
+    .mute-btn {
+      background: #6b7280;
+      border-color: #6b7280;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .mute-btn:hover:not(:disabled) {
+      background: #4b5563;
+      border-color: #4b5563;
+    }
+    .mute-btn.muted {
+      background: #ef4444;
+      border-color: #ef4444;
+    }
+    .mute-btn.muted:hover:not(:disabled) {
+      background: #dc2626;
+      border-color: #dc2626;
+    }
     .status { 
       margin-top:.75rem; 
       padding: 0.75rem;
@@ -238,6 +257,10 @@
       <button id="start" disabled>Start Camera</button>
       <button id="stop" disabled>Stop Camera</button>
       <button id="capture" class="primary-btn" disabled>📋 Take Attendance</button>
+      <button id="muteBtn" class="mute-btn" title="Toggle Voice Announcements">
+        <span id="muteIcon">🔊</span>
+        <span id="muteText">Mute</span>
+      </button>
     </div>
 
     <div id="status" class="status info">Please select a session first</div>
@@ -254,7 +277,93 @@ const stopBtn  = document.getElementById('stop');
 const captureBtn = document.getElementById('capture');
 const statusEl = document.getElementById('status');
 const sessionSelect = document.getElementById('sessionSelect');
+const muteBtn = document.getElementById('muteBtn');
+const muteIcon = document.getElementById('muteIcon');
+const muteText = document.getElementById('muteText');
+
+// Text-to-speech functionality
+let isMuted = false;
+let speechSynthesis = window.speechSynthesis;
 const sessionInfo = document.getElementById('sessionInfo');
+
+// Function to speak attendance announcements
+function speakAttendance(message) {
+    if (isMuted || !speechSynthesis) {
+        console.log('TTS blocked:', { isMuted, speechSynthesis: !!speechSynthesis });
+        return;
+    }
+    
+    console.log('Speaking:', message);
+    
+    // Stop any current speech
+    speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.8;
+    
+    // Wait for voices to load if they haven't loaded yet
+    const speak = () => {
+        const voices = speechSynthesis.getVoices();
+        console.log('Available voices:', voices.length);
+        
+        // Try to use a more natural voice if available
+        const preferredVoice = voices.find(voice => 
+            voice.lang.startsWith('en') && 
+            (voice.name.includes('Google') || voice.name.includes('Microsoft') || voice.name.includes('Samantha'))
+        );
+        
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+            console.log('Using voice:', preferredVoice.name);
+        }
+        
+        speechSynthesis.speak(utterance);
+    };
+    
+    // If voices are already loaded, speak immediately
+    if (speechSynthesis.getVoices().length > 0) {
+        speak();
+    } else {
+        // Wait for voices to load
+        speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
+    }
+}
+
+// Toggle mute functionality
+function toggleMute() {
+    isMuted = !isMuted;
+    
+    if (isMuted) {
+        muteIcon.textContent = '🔇';
+        muteText.textContent = 'Unmute';
+        muteBtn.classList.add('muted');
+        // Stop any current speech
+        speechSynthesis.cancel();
+    } else {
+        muteIcon.textContent = '🔊';
+        muteText.textContent = 'Mute';
+        muteBtn.classList.remove('muted');
+    }
+}
+
+// Add event listeners
+muteBtn.addEventListener('click', toggleMute);
+
+// Initialize TTS on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Load voices immediately
+    if (speechSynthesis.getVoices().length === 0) {
+        speechSynthesis.addEventListener('voiceschanged', function() {
+            console.log('Voices loaded:', speechSynthesis.getVoices().length);
+        }, { once: true });
+    }
+    
+    // Test TTS availability
+    console.log('Speech synthesis available:', !!speechSynthesis);
+    console.log('Initial voices count:', speechSynthesis.getVoices().length);
+});
 
 let stream;
 let faceData = [];
@@ -488,9 +597,36 @@ function captureFrame() {
         if (data.error) {
             statusEl.textContent = "Error: " + data.error;
             statusEl.className = 'status error';
+            speakAttendance("Error taking attendance");
         } else {
             statusEl.textContent = data.message;
             statusEl.className = 'status success';
+            
+            // Extract student names from the message for TTS
+            const message = data.message;
+            if (message.includes("Attendance taken:")) {
+                const studentsText = message.replace("Attendance taken: ", "");
+                if (studentsText === "No match") {
+                    speakAttendance("No students recognized");
+                } else {
+                    // Parse individual student names and announce each
+                    const students = studentsText.split(", ");
+                    students.forEach((student, index) => {
+                        // Remove status info like "(On time - 10:30:15)" and just get the name
+                        const studentName = student.split(" (")[0];
+                        setTimeout(() => {
+                            speakAttendance(`Attendance taken for ${studentName}`);
+                        }, index * 1000); // Stagger announcements by 1 second
+                    });
+                }
+            }
+            
+            // Also try a simple test to ensure TTS is working
+            setTimeout(() => {
+                if (!isMuted) {
+                    speakAttendance("Attendance recorded");
+                }
+            }, 500);
             
             // Update progress display
             if (data.attendance_count !== undefined) {
