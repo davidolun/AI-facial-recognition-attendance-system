@@ -1,0 +1,28 @@
+# Python
+__pycache__
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# VCS
+.git
+.gitignore
+
+# Python envs
+.venv
+venv
+.env
+
+# Django artifacts
+staticfiles
+media
+
+# OS/editor
+.DS_Store
+.idea
+.vscode
+*.swp
+
+# Bytecode caches
+**/__pycache__/
