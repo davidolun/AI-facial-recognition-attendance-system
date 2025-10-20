@@ -185,6 +185,7 @@ def add_student(request):
         try:
             data = json.loads(request.body)
             image_data = data.get("image")
+            face_embedding = data.get("face_embedding")  # NEW: Face embedding from browser
             student_name = data.get("name")
             student_id = data.get("student_id", "")
             email = data.get("email", "")
@@ -197,22 +198,13 @@ def add_student(request):
             if not image_data:
                 logger.warning(f"Student addition failed: No image provided by user {request.user.username}")
                 return JsonResponse({"error": "No image provided"}, status=400)
+            if not face_embedding:
+                logger.warning(f"Student addition failed: No face embedding provided by user {request.user.username}")
+                return JsonResponse({"error": "No face detected. Please ensure your face is clearly visible."}, status=400)
 
             if Student.objects.filter(name=student_name).exists():
                 logger.warning(f"Student addition failed: Student '{student_name}' already exists (user: {request.user.username})")
                 return JsonResponse({"error": f"Student '{student_name}' already exists"}, status=400)
-
-            img_str = re.sub("^data:image/.+;base64,", "", image_data)
-            img_bytes = base64.b64decode(img_str)
-
-            nparr = np.frombuffer(img_bytes, np.uint8)
-            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            face_locations = face_recognition.face_locations(rgb_frame)
-            if not face_locations:
-                logger.warning(f"Student addition failed: No face detected for {student_name} (user: {request.user.username})")
-                return JsonResponse({"error": "No face detected. Please ensure your face is clearly visible."}, status=400)
 
             students_dir = os.path.join(settings.BASE_DIR, "students")
             os.makedirs(students_dir, exist_ok=True)
@@ -230,7 +222,8 @@ def add_student(request):
                 student_id=student_id if student_id else None,
                 email=email if email else None,
                 phone=phone if phone else None,
-                image_path=save_path
+                image_path=save_path,
+                face_embedding=face_embedding  # Store the face embedding
             )
 
             # Assign to classes if provided
@@ -798,6 +791,113 @@ def get_sessions(request):
             return JsonResponse({'error': str(e)}, status=400)
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@login_required
+@csrf_exempt
+def take_attendance_with_embedding(request):
+    """Take attendance using face embeddings from browser"""
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            face_embedding = data.get("face_embedding")
+            session_id = data.get("session_id")
+            
+            if not face_embedding:
+                return JsonResponse({"error": "No face embedding received"}, status=400)
+            
+            if not session_id:
+                return JsonResponse({"error": "No session selected"}, status=400)
+
+            try:
+                # Ensure session belongs to logged-in teacher
+                session = AttendanceSession.objects.get(id=session_id, teacher=request.user)
+            except AttendanceSession.DoesNotExist:
+                return JsonResponse({"error": "Session not found or you do not have permission"}, status=400)
+
+            # Get students from the session's class
+            students = session.class_session.students.filter(is_active=True)
+            
+            # Find best match using cosine similarity
+            best_match = None
+            best_similarity = 0.0
+            threshold = 0.6  # Adjust this threshold as needed
+            
+            for student in students:
+                if student.face_embedding:
+                    try:
+                        # Calculate cosine similarity
+                        similarity = calculate_cosine_similarity(face_embedding, student.face_embedding)
+                        if similarity > best_similarity and similarity >= threshold:
+                            best_similarity = similarity
+                            best_match = student
+                    except Exception as e:
+                        print(f"Error calculating similarity for {student.name}: {e}")
+                        continue
+            
+            current_time = datetime.now()
+            recognized_students = []
+            
+            if best_match:
+                # Check if already marked attendance
+                existing_record = AttendanceRecord.objects.filter(
+                    student=best_match,
+                    session=session
+                ).first()
+                
+                if not existing_record:
+                    arrival_time = current_time.time()
+                    is_late = arrival_time > session.start_time
+                    
+                    AttendanceRecord.objects.create(
+                        student=best_match,
+                        session=session,
+                        arrival_time=arrival_time,
+                        is_late=is_late
+                    )
+                    
+                    time_str = arrival_time.strftime("%H:%M:%S")
+                    status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
+                    recognized_students.append(f"{best_match.name}{status}")
+                else:
+                    original_time = existing_record.arrival_time.strftime("%H:%M:%S") if hasattr(existing_record, 'arrival_time') and existing_record.arrival_time else existing_record.time.strftime("%H:%M:%S")
+                    recognized_students.append(f"{best_match.name} (Already marked at {original_time})")
+
+            total_attendance = AttendanceRecord.objects.filter(session=session).count()
+            total_students = session.class_session.students.filter(is_active=True).count()
+
+            message = f"Attendance taken for {session.name} ({session.class_session.name}): {', '.join(recognized_students) if recognized_students else 'No match'}"
+            
+            return JsonResponse({
+                "message": message, 
+                "attendance_count": total_attendance,
+                "total_students": total_students,
+                "session_name": session.name,
+                "class_name": session.class_session.name
+            })
+
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=400)
+            
+    return JsonResponse({"message": "Use POST request."})
+
+def calculate_cosine_similarity(embedding1, embedding2):
+    """Calculate cosine similarity between two face embeddings"""
+    import numpy as np
+    
+    # Convert to numpy arrays
+    vec1 = np.array(embedding1)
+    vec2 = np.array(embedding2)
+    
+    # Calculate cosine similarity
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    
+    if norm1 == 0 or norm2 == 0:
+        return 0
+    
+    similarity = dot_product / (norm1 * norm2)
+    return float(similarity)
 
 @login_required
 @csrf_exempt

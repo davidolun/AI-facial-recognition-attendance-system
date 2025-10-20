@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Webcam Attendance</title>
+  
+  <!-- Face-api.js for browser-based face recognition -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  
   <style>
     :root { --w: 1200px; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0e13; color:#e5e7eb; margin:0; padding:2rem; }
@@ -280,6 +284,28 @@ const sessionSelect = document.getElementById('sessionSelect');
 const muteBtn = document.getElementById('muteBtn');
 const muteIcon = document.getElementById('muteIcon');
 const muteText = document.getElementById('muteText');
+
+// Face-api.js initialization
+let faceApiLoaded = false;
+let faceDetectionModel = null;
+
+async function initializeFaceApi() {
+    try {
+        // Load face detection models
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+        await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+        await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+        
+        faceApiLoaded = true;
+        console.log('Face-api.js loaded successfully');
+    } catch (error) {
+        console.error('Failed to load face-api.js models:', error);
+        faceApiLoaded = false;
+    }
+}
+
+// Initialize face-api.js when page loads
+initializeFaceApi();
 
 // Text-to-speech functionality
 let isMuted = false;
@@ -564,9 +590,73 @@ function drawRectangles() {
     requestAnimationFrame(drawRectangles);
 }
 
-function captureFrame() {
+// Face detection and embedding functions
+async function detectFacesAndGetEmbeddings(imageElement) {
+    if (!faceApiLoaded) {
+        throw new Error('Face-api.js not loaded yet');
+    }
+    
+    try {
+        // Detect faces and get descriptors (embeddings)
+        const detections = await faceapi
+            .detectAllFaces(imageElement, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+        
+        return detections.map(detection => ({
+            detection: detection.detection,
+            descriptor: Array.from(detection.descriptor) // Convert Float32Array to regular array
+        }));
+    } catch (error) {
+        console.error('Face detection error:', error);
+        throw error;
+    }
+}
+
+async function getFaceEmbeddingFromVideo() {
+    if (!faceApiLoaded) {
+        throw new Error('Face-api.js not loaded yet');
+    }
+    
+    // Create a temporary canvas to capture current video frame
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = video.videoWidth;
+    tempCanvas.height = video.videoHeight;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(video, 0, 0);
+    
+    // Convert canvas to image element for face-api.js
+    const imageElement = new Image();
+    imageElement.src = tempCanvas.toDataURL();
+    
+    return new Promise((resolve, reject) => {
+        imageElement.onload = async () => {
+            try {
+                const faces = await detectFacesAndGetEmbeddings(imageElement);
+                if (faces.length === 0) {
+                    reject(new Error('No faces detected'));
+                } else if (faces.length > 1) {
+                    reject(new Error('Multiple faces detected. Please ensure only one person is in the frame.'));
+                } else {
+                    resolve(faces[0].descriptor);
+                }
+            } catch (error) {
+                reject(error);
+            }
+        };
+        imageElement.onerror = () => reject(new Error('Failed to load image'));
+    });
+}
+
+async function captureFrame() {
     if (!selectedSession) {
         statusEl.textContent = 'Please select a session first';
+        statusEl.className = 'status error';
+        return;
+    }
+    
+    if (!faceApiLoaded) {
+        statusEl.textContent = 'Face recognition still loading...';
         statusEl.className = 'status error';
         return;
     }
@@ -575,25 +665,25 @@ function captureFrame() {
     statusEl.className = 'status info';
     captureBtn.disabled = true;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL('image/png');
-
-    fetch("/take_attendance_with_session/", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCookie("csrftoken"),
-        },
-        body: JSON.stringify({ 
-            image: imageData,
-            session_id: selectedSession.id
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
+    try {
+        // Get face embedding from current video frame
+        const faceEmbedding = await getFaceEmbeddingFromVideo();
+        
+        // Send embedding to server for matching
+        const response = await fetch("/take_attendance_with_embedding/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": getCookie("csrftoken"),
+            },
+            body: JSON.stringify({ 
+                face_embedding: faceEmbedding,
+                session_id: selectedSession.id
+            })
+        });
+        
+        const data = await response.json();
+        
         if (data.error) {
             statusEl.textContent = "Error: " + data.error;
             statusEl.className = 'status error';
@@ -641,14 +731,21 @@ function captureFrame() {
                 selectedSession.attendance_count = data.attendance_count;
             }
         }
-    })
-    .catch(err => {
-        statusEl.textContent = "Network error: " + err.message;
+    } catch (error) {
+        if (error.message.includes('No faces detected')) {
+            statusEl.textContent = 'No face detected. Please ensure your face is visible.';
+        } else if (error.message.includes('Multiple faces detected')) {
+            statusEl.textContent = 'Multiple faces detected. Please ensure only one person is in the frame.';
+        } else if (error.message.includes('Face-api.js not loaded')) {
+            statusEl.textContent = 'Face recognition still loading. Please wait...';
+        } else {
+            statusEl.textContent = "Error: " + error.message;
+        }
         statusEl.className = 'status error';
-    })
-    .finally(() => {
+        speakAttendance("Error taking attendance");
+    } finally {
         captureBtn.disabled = false;
-    });
+    }
 }
 
 function getCookie(name) {

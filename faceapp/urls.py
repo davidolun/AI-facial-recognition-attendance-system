@@ -26,6 +26,7 @@ urlpatterns = [
     path('detect_faces/', views.detect_faces, name='detect_faces'), 
     path('ai_assistant/', views.ai_assistant, name='ai_assistant'),
     path('take_attendance_with_session/', views.take_attendance_with_session, name='take_attendance_with_session'),  # New one
+    path('take_attendance_with_embedding/', views.take_attendance_with_embedding, name='take_attendance_with_embedding'),  # Browser-based face recognition
     path('get_sessions/', views.get_sessions, name='get_sessions'),  # New endpoint to get sessions
     path('create_session/', views.create_session, name='create_session'),
     path('dashboard/', views.dashboard, name='dashboard'),
