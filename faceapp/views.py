@@ -27,13 +27,15 @@ except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
     print("Warning: face_recognition not available. Face recognition features will be disabled.")
 
-# Try to import OpenAI, with fallback
-try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-    print("Warning: OpenAI not available. AI features will be disabled.")
+# OpenAI availability (disabled by default in production to avoid build/runtime issues)
+OPENAI_AVAILABLE = False
+if os.getenv('DISABLE_OPENAI', 'true').lower() != 'true':
+    try:
+        from openai import OpenAI
+        OPENAI_AVAILABLE = True
+    except ImportError:
+        OPENAI_AVAILABLE = False
+        print("Warning: OpenAI not available. AI features will be disabled.")
 
 # Try to import office document libraries, with fallback
 try:
@@ -73,11 +75,8 @@ performance_logger = logging.getLogger('faceapp.performance')
 security_logger = logging.getLogger('faceapp.security')
 
 
-# Initialize OpenAI client with new API (if available)
-if OPENAI_AVAILABLE:
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
-else:
-    client = None
+# Do not initialize OpenAI client at import time to avoid httpx/proxies issues on some hosts
+client = None
 
 @login_required
 def home(request):
@@ -637,10 +636,19 @@ Remember the conversation history to provide contextual responses. If someone as
 """
 
     try:
+        # Lazily create the OpenAI client only when needed
+        global client
+        if OPENAI_AVAILABLE and client is None:
+            try:
+                from openai import OpenAI  # local import to avoid import-time issues
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            except Exception as e:
+                return "AI assistant is currently unavailable. Please try again later."
+
         # Check if OpenAI is available
         if not OPENAI_AVAILABLE or client is None:
             return "AI assistant is currently unavailable. Please try again later or contact support."
-        
+
         # Prepare messages for OpenAI
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(conversation_history[-6:])
