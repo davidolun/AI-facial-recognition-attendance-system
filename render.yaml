@@ -3,9 +3,11 @@ services:
     name: attendance-system
     env: python
     plan: free
-    buildCommand: "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    buildCommand: "pip install --upgrade pip setuptools wheel && pip install --only-binary=all -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
     startCommand: "gunicorn attendance_system.wsgi:application"
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: DEBUG
         value: False
       - key: SECRET_KEY

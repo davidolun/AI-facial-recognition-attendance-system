@@ -12,12 +12,10 @@ dj-database-url==2.1.0
 # Database
 psycopg2-binary==2.9.7
 
-# Image processing - use pre-compiled wheels
-Pillow==9.5.0
-numpy==1.24.3
-
-# Face recognition - simplified for deployment
-opencv-python-headless==4.8.1.78
+# Skip image processing for now (causes build issues)
+# Pillow==9.5.0
+# numpy==1.24.3
+# opencv-python-headless==4.8.1.78
 
 # Skip face-recognition for now (has complex dependencies)
 # face-recognition==1.3.0

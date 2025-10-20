@@ -9,8 +9,15 @@ from django.conf import settings
 import os
 import datetime
 import json
-import numpy as np
-import cv2
+
+# Try to import image processing libraries, with fallback
+try:
+    import numpy as np
+    import cv2
+    IMAGE_PROCESSING_AVAILABLE = True
+except ImportError:
+    IMAGE_PROCESSING_AVAILABLE = False
+    print("Warning: Image processing libraries not available.")
 
 # Try to import face_recognition, with fallback
 try:
@@ -78,6 +85,13 @@ def take_attendance(request):
             nparr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Check if image processing is available
+            if not IMAGE_PROCESSING_AVAILABLE:
+                return JsonResponse({
+                    "message": "Image processing not available in production. Please use the session-based attendance system.",
+                    "faces": []
+                })
 
             # Check if face recognition is available
             if not FACE_RECOGNITION_AVAILABLE:
