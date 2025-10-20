@@ -73,6 +73,12 @@ ALLOWED_HOSTS = [host.strip() for host in os.getenv(
     '.onrender.com,localhost,127.0.0.1'
 ).split(',') if host.strip()]
 
+# CSRF settings for production
+CSRF_COOKIE_SECURE = False  # Set to False for development/testing
+CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript access for AJAX
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = True  # Use sessions for CSRF tokens
+
 # Application definition
 
 INSTALLED_APPS = [

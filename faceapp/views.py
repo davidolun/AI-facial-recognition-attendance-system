@@ -27,9 +27,9 @@ except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
     print("Warning: face_recognition not available. Face recognition features will be disabled.")
 
-# OpenAI availability (disabled by default in production to avoid build/runtime issues)
+# OpenAI availability (enabled by default)
 OPENAI_AVAILABLE = False
-if os.getenv('DISABLE_OPENAI', 'true').lower() != 'true':
+if os.getenv('DISABLE_OPENAI', 'false').lower() != 'true':
     try:
         from openai import OpenAI
         OPENAI_AVAILABLE = True
