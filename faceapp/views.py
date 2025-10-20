@@ -26,7 +26,14 @@ try:
 except ImportError:
     FACE_RECOGNITION_AVAILABLE = False
     print("Warning: face_recognition not available. Face recognition features will be disabled.")
-from openai import OpenAI
+
+# Try to import OpenAI, with fallback
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    print("Warning: OpenAI not available. AI features will be disabled.")
 from django.db.models import Count, Q
 from datetime import datetime, date, timedelta
 from django.conf import settings
@@ -53,8 +60,11 @@ performance_logger = logging.getLogger('faceapp.performance')
 security_logger = logging.getLogger('faceapp.security')
 
 
-# Initialize OpenAI client with new API
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+# Initialize OpenAI client with new API (if available)
+if OPENAI_AVAILABLE:
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+else:
+    client = None
 
 @login_required
 def home(request):
@@ -614,6 +624,10 @@ Remember the conversation history to provide contextual responses. If someone as
 """
 
     try:
+        # Check if OpenAI is available
+        if not OPENAI_AVAILABLE or client is None:
+            return "AI assistant is currently unavailable. Please try again later or contact support."
+        
         # Prepare messages for OpenAI
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(conversation_history[-6:])
