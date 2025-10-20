@@ -40,7 +40,6 @@ class Student(models.Model):
     email = models.EmailField(null=True, blank=True)
     phone = models.CharField(max_length=15, null=True, blank=True)
     image_path = models.CharField(max_length=255)
-    face_embedding = models.JSONField(null=True, blank=True, help_text="128D face embedding from face-api.js")
     classes = models.ManyToManyField(Class, related_name='students', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)

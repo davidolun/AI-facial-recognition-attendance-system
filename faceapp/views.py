@@ -14,6 +14,8 @@ import json
 try:
     import numpy as np
     import cv2
+    from PIL import Image
+    import io
     IMAGE_PROCESSING_AVAILABLE = True
 except ImportError:
     IMAGE_PROCESSING_AVAILABLE = False
@@ -185,12 +187,10 @@ def add_student(request):
         try:
             data = json.loads(request.body)
             image_data = data.get("image")
-            face_embedding = data.get("face_embedding")  # NEW: Face embedding from browser
             student_name = data.get("name")
             student_id = data.get("student_id", "")
             email = data.get("email", "")
             phone = data.get("phone", "")
-            class_ids = data.get("class_ids", [])  # NEW: Allow multiple class assignment
 
             if not student_name:
                 logger.warning(f"Student addition failed: No name provided by user {request.user.username}")
@@ -198,61 +198,82 @@ def add_student(request):
             if not image_data:
                 logger.warning(f"Student addition failed: No image provided by user {request.user.username}")
                 return JsonResponse({"error": "No image provided"}, status=400)
-            if not face_embedding:
-                logger.warning(f"Student addition failed: No face embedding provided by user {request.user.username}")
-                return JsonResponse({"error": "No face detected. Please ensure your face is clearly visible."}, status=400)
 
-            if Student.objects.filter(name=student_name).exists():
-                logger.warning(f"Student addition failed: Student '{student_name}' already exists (user: {request.user.username})")
-                return JsonResponse({"error": f"Student '{student_name}' already exists"}, status=400)
+            # Decode base64 image
+            try:
+                image_data = image_data.split(',')[1]  # Remove data:image/png;base64, prefix
+                image_bytes = base64.b64decode(image_data)
+                image = Image.open(io.BytesIO(image_bytes))
+            except Exception as e:
+                logger.error(f"Image decoding failed for user {request.user.username}: {str(e)}")
+                return JsonResponse({"error": "Invalid image format"}, status=400)
 
-            students_dir = os.path.join(settings.BASE_DIR, "students")
-            os.makedirs(students_dir, exist_ok=True)
+            # Face detection and encoding
+            if not FACE_RECOGNITION_AVAILABLE:
+                logger.warning(f"Face recognition not available, creating student without face data")
+                face_encoding = None
+            else:
+                try:
+                    # Convert PIL image to RGB and then to numpy array
+                    rgb_image = image.convert('RGB')
+                    rgb_array = np.array(rgb_image)
+                    face_encodings = face_recognition.face_encodings(rgb_array)
+                    
+                    if not face_encodings:
+                        logger.warning(f"No face detected in image for {student_name}")
+                        return JsonResponse({"error": "No face detected in the image. Please ensure your face is clearly visible."}, status=400)
+                    
+                    face_encoding = face_encodings[0].tolist()  # Convert to list for JSON storage
+                    logger.info(f"Face encoding generated for {student_name}")
+                except Exception as e:
+                    logger.error(f"Face encoding failed for {student_name}: {str(e)}")
+                    return JsonResponse({"error": "Face detection failed. Please try again."}, status=400)
 
+            # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{student_name}_{timestamp}.jpg"
-            save_path = os.path.join(students_dir, filename)
+            filename = f"{student_name.lower().replace(' ', '_')}_{timestamp}.jpg"
+            file_path = os.path.join(settings.MEDIA_ROOT, 'students', filename)
+            
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            
+            # Convert to RGB if needed and save image
+            if image.mode in ('RGBA', 'LA', 'P'):
+                # Create a white background for transparent images
+                background = Image.new('RGB', image.size, (255, 255, 255))
+                if image.mode == 'P':
+                    image = image.convert('RGBA')
+                background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
+                image = background
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            image.save(file_path, 'JPEG', quality=95)
+            relative_path = os.path.join('students', filename)
 
-            with open(save_path, "wb") as f:
-                f.write(img_bytes)
-
-            # Create student
+            # Create student record
             student = Student.objects.create(
                 name=student_name,
                 student_id=student_id if student_id else None,
                 email=email if email else None,
                 phone=phone if phone else None,
-                image_path=save_path,
-                face_embedding=face_embedding  # Store the face embedding
+                image_path=relative_path
             )
 
-            # Assign to classes if provided
-            if class_ids:
-                # Verify all classes belong to the logged-in teacher
-                teacher_classes = Class.objects.filter(id__in=class_ids, teacher=request.user)
-                if teacher_classes.count() != len(class_ids):
-                    logger.warning(f"Student addition failed: Invalid class permissions for user {request.user.username}")
-                    return JsonResponse({"error": "Some classes not found or you do not have permission"}, status=400)
-
-                student.classes.set(teacher_classes)
-                logger.info(f"Student {student_name} assigned to {len(teacher_classes)} classes by user {request.user.username}")
-
             processing_time = time.time() - start_time
-            performance_logger.info(f"Student addition completed in {processing_time:.2f}s - {student_name} by user {request.user.username}")
-            logger.info(f"Student {student_name} added successfully by user {request.user.username}")
-
+            logger.info(f"Student {student_name} added successfully in {processing_time:.2f}s by user {request.user.username}")
+            
             return JsonResponse({
                 "message": f"Student {student_name} added successfully!",
-                "student_id": student.id
+                "student_id": student.id,
+                "processing_time": f"{processing_time:.2f}s"
             })
 
         except Exception as e:
-            error_time = time.time() - start_time
-            logger.error(f"Student addition failed after {error_time:.2f}s for user {request.user.username}: {str(e)}")
-            performance_logger.warning(f"Student addition error: {error_time:.2f}s - {str(e)}")
-            print("ERROR in add_student:", e)
+            processing_time = time.time() - start_time
+            logger.error(f"Student addition failed after {processing_time:.2f}s for user {request.user.username}: {str(e)}")
             return JsonResponse({"error": str(e)}, status=400)
-
+    
     return render(request, "add_student.html")
 
 @login_required
@@ -296,9 +317,11 @@ def take_attendance_enhanced(request):
             student_objects = []
 
             for student in students:
-                if os.path.exists(student.image_path):
+                # Convert relative path to full path
+                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
+                if os.path.exists(full_image_path):
                     try:
-                        img = face_recognition.load_image_file(student.image_path)
+                        img = face_recognition.load_image_file(full_image_path)
                         enc = face_recognition.face_encodings(img)
                         if enc:
                             student_encodings.append(enc[0])
@@ -309,9 +332,13 @@ def take_attendance_enhanced(request):
 
             recognized_students = []
             face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+            print(f"Number of student encodings loaded: {len(student_encodings)}")
+            print(f"Number of faces detected in current frame: {len(face_encodings)}")
             
             for face_encoding in face_encodings:
-                matches = face_recognition.compare_faces(student_encodings, face_encoding)
+                # Use a more lenient tolerance for face matching (default is 0.6, we'll use 0.7)
+                matches = face_recognition.compare_faces(student_encodings, face_encoding, tolerance=0.7)
+                print(f"Face matching results: {matches}")
                 if True in matches:
                     match_index = matches.index(True)
                     student = student_objects[match_index]
@@ -792,112 +819,6 @@ def get_sessions(request):
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-@login_required
-@csrf_exempt
-def take_attendance_with_embedding(request):
-    """Take attendance using face embeddings from browser"""
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            face_embedding = data.get("face_embedding")
-            session_id = data.get("session_id")
-            
-            if not face_embedding:
-                return JsonResponse({"error": "No face embedding received"}, status=400)
-            
-            if not session_id:
-                return JsonResponse({"error": "No session selected"}, status=400)
-
-            try:
-                # Ensure session belongs to logged-in teacher
-                session = AttendanceSession.objects.get(id=session_id, teacher=request.user)
-            except AttendanceSession.DoesNotExist:
-                return JsonResponse({"error": "Session not found or you do not have permission"}, status=400)
-
-            # Get students from the session's class
-            students = session.class_session.students.filter(is_active=True)
-            
-            # Find best match using cosine similarity
-            best_match = None
-            best_similarity = 0.0
-            threshold = 0.6  # Adjust this threshold as needed
-            
-            for student in students:
-                if student.face_embedding:
-                    try:
-                        # Calculate cosine similarity
-                        similarity = calculate_cosine_similarity(face_embedding, student.face_embedding)
-                        if similarity > best_similarity and similarity >= threshold:
-                            best_similarity = similarity
-                            best_match = student
-                    except Exception as e:
-                        print(f"Error calculating similarity for {student.name}: {e}")
-                        continue
-            
-            current_time = datetime.now()
-            recognized_students = []
-            
-            if best_match:
-                # Check if already marked attendance
-                existing_record = AttendanceRecord.objects.filter(
-                    student=best_match,
-                    session=session
-                ).first()
-                
-                if not existing_record:
-                    arrival_time = current_time.time()
-                    is_late = arrival_time > session.start_time
-                    
-                    AttendanceRecord.objects.create(
-                        student=best_match,
-                        session=session,
-                        arrival_time=arrival_time,
-                        is_late=is_late
-                    )
-                    
-                    time_str = arrival_time.strftime("%H:%M:%S")
-                    status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
-                    recognized_students.append(f"{best_match.name}{status}")
-                else:
-                    original_time = existing_record.arrival_time.strftime("%H:%M:%S") if hasattr(existing_record, 'arrival_time') and existing_record.arrival_time else existing_record.time.strftime("%H:%M:%S")
-                    recognized_students.append(f"{best_match.name} (Already marked at {original_time})")
-
-            total_attendance = AttendanceRecord.objects.filter(session=session).count()
-            total_students = session.class_session.students.filter(is_active=True).count()
-
-            message = f"Attendance taken for {session.name} ({session.class_session.name}): {', '.join(recognized_students) if recognized_students else 'No match'}"
-            
-            return JsonResponse({
-                "message": message, 
-                "attendance_count": total_attendance,
-                "total_students": total_students,
-                "session_name": session.name,
-                "class_name": session.class_session.name
-            })
-
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
-            
-    return JsonResponse({"message": "Use POST request."})
-
-def calculate_cosine_similarity(embedding1, embedding2):
-    """Calculate cosine similarity between two face embeddings"""
-    import numpy as np
-    
-    # Convert to numpy arrays
-    vec1 = np.array(embedding1)
-    vec2 = np.array(embedding2)
-    
-    # Calculate cosine similarity
-    dot_product = np.dot(vec1, vec2)
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-    
-    if norm1 == 0 or norm2 == 0:
-        return 0
-    
-    similarity = dot_product / (norm1 * norm2)
-    return float(similarity)
 
 @login_required
 @csrf_exempt
@@ -938,15 +859,16 @@ def take_attendance_with_session(request):
             student_objects = []
 
             for student in students:
-                if os.path.exists(student.image_path):
+                # Convert relative path to full path
+                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
+                if os.path.exists(full_image_path):
                     try:
-                        img = face_recognition.load_image_file(student.image_path)
+                        img = face_recognition.load_image_file(full_image_path)
                         enc = face_recognition.face_encodings(img)
                         if enc:
                             student_encodings.append(enc[0])
                             student_objects.append(student)
                     except Exception as e:
-                        print(f"Error processing image for {student.name}: {e}")
                         continue
 
             recognized_students = []
