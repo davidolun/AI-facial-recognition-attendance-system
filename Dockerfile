@@ -14,15 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
-    libtiff5-dev \
+    libtiff-dev \
     libopenblas-dev \
     liblapack-dev \
     libatlas-base-dev \
     libboost-all-dev \
     libx11-dev \
-    libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0 \
     libpq-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
