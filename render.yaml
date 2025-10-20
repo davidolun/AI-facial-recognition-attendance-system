@@ -7,7 +7,7 @@ services:
     startCommand: "gunicorn attendance_system.wsgi:application"
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11.9"
+        value: "3.12.5"
       - key: DEBUG
         value: False
       - key: SECRET_KEY
