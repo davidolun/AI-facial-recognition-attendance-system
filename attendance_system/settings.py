@@ -61,10 +61,17 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 # For production deployment
 CSRF_TRUSTED_ORIGINS = [
-    origin.strip() for origin in os.getenv('CSRF_TRUSTED_ORIGINS', 'https://attendance-system.onrender.com').split(',') if origin.strip()
+    origin.strip() for origin in os.getenv(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://*.onrender.com'
+    ).split(',') if origin.strip()
 ]
 
-ALLOWED_HOSTS = [host.strip() for host in os.getenv('ALLOWED_HOSTS', 'attendance-system.onrender.com,localhost,127.0.0.1').split(',') if host.strip()]
+# Allow Render dynamic hostnames by default
+ALLOWED_HOSTS = [host.strip() for host in os.getenv(
+    'ALLOWED_HOSTS',
+    '.onrender.com,localhost,127.0.0.1'
+).split(',') if host.strip()]
 
 # Application definition
 
