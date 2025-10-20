@@ -7,11 +7,18 @@ from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import os
-import face_recognition
 import datetime
 import json
 import numpy as np
 import cv2
+
+# Try to import face_recognition, with fallback
+try:
+    import face_recognition
+    FACE_RECOGNITION_AVAILABLE = True
+except ImportError:
+    FACE_RECOGNITION_AVAILABLE = False
+    print("Warning: face_recognition not available. Face recognition features will be disabled.")
 from openai import OpenAI
 from django.db.models import Count, Q
 from datetime import datetime, date, timedelta
@@ -58,8 +65,6 @@ def take_attendance(request):
 
     if request.method == "POST":
         try:
-            import json, base64, re, datetime, os, face_recognition, cv2, numpy as np
-
             data = json.loads(request.body)
             image_data = data.get("image")
             if not image_data:
@@ -73,6 +78,13 @@ def take_attendance(request):
             nparr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            # Check if face recognition is available
+            if not FACE_RECOGNITION_AVAILABLE:
+                return JsonResponse({
+                    "message": "Face recognition not available in production. Please use the session-based attendance system.",
+                    "faces": []
+                })
 
             # detect faces
             face_locations = face_recognition.face_locations(rgb_frame)
