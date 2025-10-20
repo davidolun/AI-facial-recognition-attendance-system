@@ -253,7 +253,7 @@
     </div>
 
     <div class="cam" style="position:relative;">
-      <video id="webcam" autoplay playsinline muted style="position:absolute; top:0; left:0;"></video>
+      <video id="webcam" autoplay playsinline muted style="position:absolute; top:0; left:0; transform: scaleX(-1);"></video>
       <canvas id="overlay" style="position:absolute; top:0; left:0; pointer-events: none; transform: scaleX(-1);"></canvas>
     </div>
 
@@ -395,6 +395,7 @@ let stream;
 let faceData = [];
 let selectedSession = null;
 let sessions = [];
+let faceDetectionInterval;
 
 // Load sessions on page load
 async function loadSessions() {
@@ -510,8 +511,7 @@ async function startCamera() {
         captureBtn.disabled = false;
 
         resizeOverlay();
-        updateFaceData();
-        drawRectangles();
+        startFaceDetection();
     } catch (err) {
         console.error(err);
         statusEl.textContent = 'Error: ' + (err.message || err.name);
@@ -532,6 +532,16 @@ function stopCamera() {
         stream.getTracks().forEach(t => t.stop());
         video.srcObject = null;
     }
+    
+    // Stop face detection
+    if (faceDetectionInterval) {
+        clearInterval(faceDetectionInterval);
+        faceDetectionInterval = null;
+    }
+    
+    // Clear overlay
+    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+    
     statusEl.textContent = 'Camera stopped.';
     statusEl.className = 'status info';
     startBtn.disabled = false;
@@ -539,56 +549,47 @@ function stopCamera() {
     captureBtn.disabled = true;
 }
 
-async function updateFaceData() {
-    if (!video.videoWidth) {
-        setTimeout(updateFaceData, 500);
-        return;
-    }
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL('image/png');
-
-    try {
-        const response = await fetch("/detect_faces/", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": getCookie("csrftoken"),
-            },
-            body: JSON.stringify({ image: imageData })
-        });
-
-        const data = await response.json();
-        faceData = data.faces || [];
-    } catch (err) {
-        console.error("Face detection error:", err);
-    }
-
-    setTimeout(updateFaceData, 500);
+function startFaceDetection() {
+    if (!faceApiLoaded) return;
+    
+    faceDetectionInterval = setInterval(async () => {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            try {
+                const detections = await faceapi
+                    .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptors();
+                
+                drawFaceBoxes(detections);
+            } catch (error) {
+                console.error('Face detection error:', error);
+            }
+        }
+    }, 100);
 }
 
-function drawRectangles() {
+function drawFaceBoxes(detections) {
     overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-    overlayCtx.strokeStyle = "#22c55e";
-    overlayCtx.lineWidth = 3;
-
+    
+    if (detections.length === 0) return;
+    
     const scaleX = overlay.width / video.videoWidth;
     const scaleY = overlay.height / video.videoHeight;
-
-    faceData.forEach(f => {
-        const x = f.left * scaleX;
-        const y = f.top * scaleY;
-        const w = (f.right - f.left) * scaleX;
-        const h = (f.bottom - f.top) * scaleY;
+    
+    detections.forEach(detection => {
+        const { x, y, width, height } = detection.detection.box;
         
-        overlayCtx.strokeRect(x, y, w, h);
+        overlayCtx.strokeStyle = '#22c55e';
+        overlayCtx.lineWidth = 3;
+        overlayCtx.strokeRect(x * scaleX, y * scaleY, width * scaleX, height * scaleY);
+        
+        // Draw face label
+        overlayCtx.fillStyle = '#22c55e';
+        overlayCtx.font = '16px Arial';
+        overlayCtx.fillText('Face Detected', x * scaleX, y * scaleY - 5);
     });
-
-    requestAnimationFrame(drawRectangles);
 }
+
 
 // Face detection and embedding functions
 async function detectFacesAndGetEmbeddings(imageElement) {
