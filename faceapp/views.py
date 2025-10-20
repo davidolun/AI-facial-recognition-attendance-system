@@ -34,6 +34,25 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
     print("Warning: OpenAI not available. AI features will be disabled.")
+
+# Try to import office document libraries, with fallback
+try:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+    print("Warning: openpyxl not available. Excel export features will be disabled.")
+
+try:
+    from docx import Document
+    from docx.shared import Inches, Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
+    print("Warning: python-docx not available. Word export features will be disabled.")
 from django.db.models import Count, Q
 from datetime import datetime, date, timedelta
 from django.conf import settings
@@ -47,12 +66,6 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from .models import Teacher, Class
 from django.db import transaction
-import openpyxl
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
-from docx import Document
-from docx.shared import Inches, Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # Set up loggers
 logger = logging.getLogger('faceapp')
