@@ -709,6 +709,9 @@
                         <div id="emptyStudents" class="empty-state" style="display: none;">
                             <h3>No Students Found</h3>
                             <p>No students have been added to your classes yet.</p>
+                            <button onclick="switchToAddStudentTab()" class="create-class-btn" style="margin-top: 1rem;">
+                                👤 Add Student
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1060,6 +1063,14 @@
             const createTab = document.querySelector('[data-tab="create"]');
             if (createTab) {
                 createTab.click();
+            }
+        }
+
+        function switchToAddStudentTab() {
+            // Find and click the Add Students subtab
+            const addStudentTab = document.querySelector('[data-subtab="all-students"]');
+            if (addStudentTab) {
+                addStudentTab.click();
             }
         }
 

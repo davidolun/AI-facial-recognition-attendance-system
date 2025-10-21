@@ -365,7 +365,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Developer**: david olunloyo
 - **Email**: olunloyooladipupo@gmail.com
-- **LinkedIn**: linkedin.com/in/oladipupo-olunloyo-david/ 
+- **LinkedIn**: https://linkedin.com/in/oladipupo-olunloyo-david/ 
 - **GitHub**: https://github.com/wavydips
 - **Portfolio**: https://davidolunloyo.onrender.com/
 
