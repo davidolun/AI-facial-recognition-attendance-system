@@ -21,13 +21,8 @@ except ImportError:
     IMAGE_PROCESSING_AVAILABLE = False
     print("Warning: Image processing libraries not available.")
 
-# Try to import face_recognition, with fallback
-try:
-    import face_recognition
-    FACE_RECOGNITION_AVAILABLE = True
-except ImportError:
-    FACE_RECOGNITION_AVAILABLE = False
-    print("Warning: face_recognition not available. Face recognition features will be disabled.")
+# Face recognition using OpenCV Haar cascades (always available with opencv-python)
+FACE_RECOGNITION_AVAILABLE = True
 
 # OpenAI availability (enabled by default)
 OPENAI_AVAILABLE = False
@@ -38,6 +33,101 @@ if os.getenv('DISABLE_OPENAI', 'false').lower() != 'true':
     except ImportError:
         OPENAI_AVAILABLE = False
         print("Warning: OpenAI not available. AI features will be disabled.")
+
+# OpenCV Haar Cascade helper functions
+def detect_faces_opencv(image_array):
+    """Detect faces in an image using OpenCV Haar cascades"""
+    try:
+        # Load the Haar cascade for face detection
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
+        # Convert to grayscale for better detection
+        gray = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces
+        faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+        
+        # Convert to (x1, y1, x2, y2) format and ensure Python ints
+        face_boxes = []
+        for (x, y, w, h) in faces:
+            face_boxes.append((int(x), int(y), int(x + w), int(y + h)))
+        
+        return face_boxes
+    except Exception as e:
+        print(f"Face detection error: {e}")
+        return []
+
+def extract_face_features(image_array, face_box):
+    """Extract basic face features using OpenCV"""
+    try:
+        x1, y1, x2, y2 = face_box
+        face_crop = image_array[y1:y2, x1:x2]
+        
+        if face_crop.size == 0:
+            return None
+            
+        # Resize to standard size for comparison
+        face_resized = cv2.resize(face_crop, (100, 100))
+        
+        # Convert to grayscale
+        gray_face = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
+        
+        # Flatten and normalize, convert to Python list
+        features = gray_face.flatten().astype(np.float32) / 255.0
+        
+        return features.tolist()
+    except Exception as e:
+        print(f"Face feature extraction error: {e}")
+        return None
+
+def compare_faces_opencv(features1, features2, threshold=0.3):
+    """Compare two face feature vectors using L2 distance"""
+    try:
+        if features1 is None or features2 is None:
+            return False, 1.0
+            
+        # Convert to numpy arrays for calculation
+        features1 = np.array(features1)
+        features2 = np.array(features2)
+        
+        # Calculate L2 distance
+        distance = np.linalg.norm(features1 - features2)
+        
+        # Normalize distance (0-1 scale)
+        normalized_distance = distance / np.sqrt(len(features1))
+        
+        # Convert to Python float
+        return normalized_distance < threshold, float(normalized_distance)
+    except Exception as e:
+        print(f"Face comparison error: {e}")
+        return False, 1.0
+
+def find_face_in_image(image_array, student_features, student_paths, threshold=0.3):
+    """Find matching face in image array against student features"""
+    try:
+        faces = detect_faces_opencv(image_array)
+        if not faces:
+            return None, float('inf')
+            
+        best_match = None
+        best_distance = float('inf')
+        
+        for face_box in faces:
+            current_features = extract_face_features(image_array, face_box)
+            if current_features is None:
+                continue
+                
+            for i, student_features_item in enumerate(student_features):
+                if student_features_item is not None:
+                    verified, distance = compare_faces_opencv(current_features, student_features_item, threshold)
+                    if verified and distance < best_distance:
+                        best_match = student_paths[i]
+                        best_distance = distance
+        
+        return best_match, best_distance
+    except Exception as e:
+        print(f"Face finding error: {e}")
+        return None, float('inf')
 
 # Try to import office document libraries, with fallback
 try:
@@ -124,44 +214,59 @@ def take_attendance(request):
                     "faces": []
                 })
 
-            # detect faces
-            face_locations = face_recognition.face_locations(rgb_frame)
-
-            if not face_locations:
+            # Detect faces using OpenCV
+            faces = detect_faces_opencv(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR))
+            if not faces:
                 return JsonResponse({"message": "No face detected", "faces": []})
 
-            # Prepare face rectangles for JS: [top, right, bottom, left]
-            faces_for_js = [{"top": f[0], "right": f[1], "bottom": f[2], "left": f[3]} for f in face_locations]
+            # Prepare face rectangles for JS
+            faces_for_js = [{"top": f[1], "right": f[2], "bottom": f[3], "left": f[0]} for f in faces]
 
-            # Face recognition part (optional)
+            # Face recognition part using OpenCV
             students_dir = os.path.join(settings.BASE_DIR, "students")
-            student_encodings = []
+            student_image_paths = []
+            student_features = []
             student_names = []
 
             for file in os.listdir(students_dir):
                 if file.endswith(".jpg") or file.endswith(".png"):
-                    img = face_recognition.load_image_file(os.path.join(students_dir, file))
-                    enc = face_recognition.face_encodings(img)
-                    if enc:
-                        student_encodings.append(enc[0])
-                        student_names.append(file.rsplit(".", 1)[0])
+                    student_path = os.path.join(students_dir, file)
+                    student_image_paths.append(student_path)
+                    student_names.append(file.rsplit(".", 1)[0])
+                    
+                    # Extract features for this student
+                    try:
+                        student_img = cv2.imread(student_path)
+                        student_faces = detect_faces_opencv(student_img)
+                        if student_faces:
+                            features = extract_face_features(student_img, student_faces[0])
+                            student_features.append(features)
+                        else:
+                            student_features.append(None)
+                    except Exception as e:
+                        print(f"Error processing {file}: {e}")
+                        student_features.append(None)
 
             recognized = []
-            face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
-            for face_encoding in face_encodings:
-                matches = face_recognition.compare_faces(student_encodings, face_encoding)
-                if True in matches:
-                    match_index = matches.index(True)
-                    name = student_names[match_index]
-                    recognized.append(name)
+            if student_image_paths and any(feat is not None for feat in student_features):
+                try:
+                    best_match, distance = find_face_in_image(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR), 
+                                                            student_features, student_image_paths, threshold=0.3)
+                    if best_match:
+                        # Extract name from path
+                        filename = os.path.basename(best_match)
+                        name = filename.rsplit(".", 1)[0]
+                        recognized.append(name)
 
-                    # log attendance
-                    now = datetime.datetime.now()
-                    time_str = now.strftime("%H:%M:%S")
-                    date_str = now.strftime("%Y-%m-%d")
-                    log_path = os.path.join(settings.BASE_DIR, "attendance.csv")
-                    with open(log_path, "a") as f:
-                        f.write(f"{name},{time_str},{date_str}\n")
+                        # log attendance
+                        now = datetime.datetime.now()
+                        time_str = now.strftime("%H:%M:%S")
+                        date_str = now.strftime("%Y-%m-%d")
+                        log_path = os.path.join(settings.BASE_DIR, "attendance.csv")
+                        with open(log_path, "a") as f:
+                            f.write(f"{name},{time_str},{date_str}\n")
+                except Exception as e:
+                    print(f"Face recognition error: {e}")
 
             processing_time = time.time() - start_time
             performance_logger.info(f"Face recognition completed in {processing_time:.2f}s - recognized: {len(recognized)} students")
@@ -208,25 +313,29 @@ def add_student(request):
                 logger.error(f"Image decoding failed for user {request.user.username}: {str(e)}")
                 return JsonResponse({"error": "Invalid image format"}, status=400)
 
-            # Face detection and encoding
+            # Face detection using OpenCV
             if not FACE_RECOGNITION_AVAILABLE:
                 logger.warning(f"Face recognition not available, creating student without face data")
                 face_encoding = None
             else:
                 try:
-                    # Convert PIL image to RGB and then to numpy array
-                    rgb_image = image.convert('RGB')
-                    rgb_array = np.array(rgb_image)
-                    face_encodings = face_recognition.face_encodings(rgb_array)
+                    # Convert PIL image to numpy array
+                    image_array = np.array(image.convert('RGB'))
+                    image_bgr = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
                     
-                    if not face_encodings:
+                    # Check if face is detected
+                    faces = detect_faces_opencv(image_bgr)
+                    
+                    if not faces:
                         logger.warning(f"No face detected in image for {student_name}")
                         return JsonResponse({"error": "No face detected in the image. Please ensure your face is clearly visible."}, status=400)
                     
-                    face_encoding = face_encodings[0].tolist()  # Convert to list for JSON storage
-                    logger.info(f"Face encoding generated for {student_name}")
+                    # For OpenCV, we don't need to store encodings as we'll compare directly
+                    face_encoding = "opencv_detected"  # Placeholder
+                    logger.info(f"Face detected for {student_name}")
+                        
                 except Exception as e:
-                    logger.error(f"Face encoding failed for {student_name}: {str(e)}")
+                    logger.error(f"Face detection failed for {student_name}: {str(e)}")
                     return JsonResponse({"error": "Face detection failed. Please try again."}, status=400)
 
             # Generate unique filename
@@ -298,11 +407,12 @@ def take_attendance_enhanced(request):
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            face_locations = face_recognition.face_locations(rgb_frame)
-            if not face_locations:
+            # Detect faces using OpenCV
+            faces = detect_faces_opencv(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR))
+            if not faces:
                 return JsonResponse({"message": "No face detected", "faces": []})
 
-            faces_for_js = [{"top": f[0], "right": f[1], "bottom": f[2], "left": f[3]} for f in face_locations]
+            faces_for_js = [{"top": f[1], "right": f[2], "bottom": f[3], "left": f[0]} for f in faces]
 
             today = date.today()
             current_time = datetime.now()
@@ -313,60 +423,81 @@ def take_attendance_enhanced(request):
             )
 
             students = Student.objects.filter(is_active=True)
-            student_encodings = []
+            student_image_paths = []
             student_objects = []
 
             for student in students:
                 # Convert relative path to full path
                 full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
                 if os.path.exists(full_image_path):
-                    try:
-                        img = face_recognition.load_image_file(full_image_path)
-                        enc = face_recognition.face_encodings(img)
-                        if enc:
-                            student_encodings.append(enc[0])
-                            student_objects.append(student)
-                    except Exception as e:
-                        print(f"Error processing image for {student.name}: {e}")
-                        continue
+                    student_image_paths.append(full_image_path)
+                    student_objects.append(student)
 
             recognized_students = []
-            face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
-            print(f"Number of student encodings loaded: {len(student_encodings)}")
-            print(f"Number of faces detected in current frame: {len(face_encodings)}")
+            print(f"Number of student images loaded: {len(student_image_paths)}")
+            print(f"Number of faces detected in current frame: {len(faces)}")
             
-            for face_encoding in face_encodings:
-                # Use a more lenient tolerance for face matching (default is 0.6, we'll use 0.7)
-                matches = face_recognition.compare_faces(student_encodings, face_encoding, tolerance=0.7)
-                print(f"Face matching results: {matches}")
-                if True in matches:
-                    match_index = matches.index(True)
-                    student = student_objects[match_index]
+            # Extract features for students
+            student_features = []
+            for student in students:
+                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
+                if os.path.exists(full_image_path):
+                    try:
+                        student_img = cv2.imread(full_image_path)
+                        student_faces = detect_faces_opencv(student_img)
+                        if student_faces:
+                            features = extract_face_features(student_img, student_faces[0])
+                            student_features.append(features)
+                        else:
+                            student_features.append(None)
+                    except Exception as e:
+                        print(f"Error processing {student.name}: {e}")
+                        student_features.append(None)
+                else:
+                    student_features.append(None)
+            
+            # Find matching face using OpenCV
+            try:
+                best_match, distance = find_face_in_image(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR), 
+                                                        student_features, student_image_paths, threshold=0.3)
+                if best_match:
+                    # Find corresponding student object
+                    for i, student_path in enumerate(student_image_paths):
+                        if student_path == best_match:
+                            student = student_objects[i]
+                            recognized_students.append(student)
+                            break
+            except Exception as e:
+                print(f"Face recognition error: {e}")
+            
+            # Process recognized students
+            status_messages = []
+            for student in recognized_students:
+                existing_record = AttendanceRecord.objects.filter(
+                    student=student,
+                    session=session
+                ).first()
+                
+                if not existing_record:
+                    arrival_time = current_time.time()
+                    is_late = arrival_time > session.start_time
                     
-                    existing_record = AttendanceRecord.objects.filter(
+                    AttendanceRecord.objects.create(
                         student=student,
-                        session=session
-                    ).first()
+                        session=session,
+                        arrival_time=arrival_time,
+                        is_late=is_late
+                    )
                     
-                    if not existing_record:
-                        arrival_time = current_time.time()
-                        is_late = arrival_time > session.start_time
-                        
-                        AttendanceRecord.objects.create(
-                            student=student,
-                            session=session,
-                            arrival_time=arrival_time,
-                            is_late=is_late
-                        )
-                        
-                        time_str = arrival_time.strftime("%H:%M:%S")
-                        status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
-                        recognized_students.append(f"{student.name}{status}")
-                    else:
-                        original_time = existing_record.arrival_time.strftime("%H:%M:%S") if hasattr(existing_record, 'arrival_time') and existing_record.arrival_time else existing_record.time.strftime("%H:%M:%S")
-                        recognized_students.append(f"{student.name} (Already marked at {original_time})")
+                    time_str = arrival_time.strftime("%H:%M:%S")
+                    status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
+                    status_messages.append(f"{student.name}{status}")
+                else:
+                    original_time = existing_record.arrival_time.strftime("%H:%M:%S") if hasattr(existing_record, 'arrival_time') and existing_record.arrival_time else existing_record.time.strftime("%H:%M:%S")
+                    status_messages.append(f"{student.name} (Already marked at {original_time})")
+            
 
-            message = f"Attendance taken: {', '.join(recognized_students) if recognized_students else 'No match'}"
+            message = f"Attendance taken: {', '.join(status_messages) if status_messages else 'No match'}"
             return JsonResponse({"message": message, "faces": faces_for_js})
 
         except Exception as e:
@@ -389,10 +520,11 @@ def detect_faces(request):
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             rgb_frame = frame[:, :, ::-1]
 
-            face_locations = face_recognition.face_locations(rgb_frame)
+            # Detect faces using OpenCV
+            faces = detect_faces_opencv(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR))
             faces_list = []
-            for top, right, bottom, left in face_locations:
-                faces_list.append({"top": top, "right": right, "bottom": bottom, "left": left})
+            for face in faces:
+                faces_list.append({"top": face[1], "right": face[2], "bottom": face[3], "left": face[0]})
 
             return JsonResponse({"faces": faces_list})
         except Exception as e:
@@ -847,67 +979,92 @@ def take_attendance_with_session(request):
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            face_locations = face_recognition.face_locations(rgb_frame)
-            if not face_locations:
+            # Detect faces using OpenCV
+            faces = detect_faces_opencv(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR))
+            if not faces:
                 return JsonResponse({"message": "No face detected", "faces": []})
 
-            faces_for_js = [{"top": f[0], "right": f[1], "bottom": f[2], "left": f[3]} for f in face_locations]
+            faces_for_js = [{"top": f[1], "right": f[2], "bottom": f[3], "left": f[0]} for f in faces]
 
             # Only get students from the session's class
             students = session.class_session.students.filter(is_active=True)
-            student_encodings = []
+            student_image_paths = []
             student_objects = []
 
             for student in students:
                 # Convert relative path to full path
                 full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
                 if os.path.exists(full_image_path):
-                    try:
-                        img = face_recognition.load_image_file(full_image_path)
-                        enc = face_recognition.face_encodings(img)
-                        if enc:
-                            student_encodings.append(enc[0])
-                            student_objects.append(student)
-                    except Exception as e:
-                        continue
+                    student_image_paths.append(full_image_path)
+                    student_objects.append(student)
 
             recognized_students = []
-            face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
             current_time = datetime.now()
             
-            for face_encoding in face_encodings:
-                matches = face_recognition.compare_faces(student_encodings, face_encoding)
-                if True in matches:
-                    match_index = matches.index(True)
-                    student = student_objects[match_index]
+            # Extract features for students
+            student_features = []
+            for student in students:
+                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
+                if os.path.exists(full_image_path):
+                    try:
+                        student_img = cv2.imread(full_image_path)
+                        student_faces = detect_faces_opencv(student_img)
+                        if student_faces:
+                            features = extract_face_features(student_img, student_faces[0])
+                            student_features.append(features)
+                        else:
+                            student_features.append(None)
+                    except Exception as e:
+                        print(f"Error processing {student.name}: {e}")
+                        student_features.append(None)
+                else:
+                    student_features.append(None)
+            
+            # Find matching face using OpenCV
+            try:
+                best_match, distance = find_face_in_image(cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR), 
+                                                        student_features, student_image_paths, threshold=0.3)
+                if best_match:
+                    # Find corresponding student object
+                    for i, student_path in enumerate(student_image_paths):
+                        if student_path == best_match:
+                            student = student_objects[i]
+                            recognized_students.append(student)
+                            break
+            except Exception as e:
+                print(f"Face recognition error: {e}")
+            
+            # Process recognized students
+            status_messages = []
+            for student in recognized_students:
+                existing_record = AttendanceRecord.objects.filter(
+                    student=student,
+                    session=session
+                ).first()
+                
+                if not existing_record:
+                    arrival_time = current_time.time()
+                    is_late = arrival_time > session.start_time
                     
-                    existing_record = AttendanceRecord.objects.filter(
+                    AttendanceRecord.objects.create(
                         student=student,
-                        session=session
-                    ).first()
+                        session=session,
+                        arrival_time=arrival_time,
+                        is_late=is_late
+                    )
                     
-                    if not existing_record:
-                        arrival_time = current_time.time()
-                        is_late = arrival_time > session.start_time
-                        
-                        AttendanceRecord.objects.create(
-                            student=student,
-                            session=session,
-                            arrival_time=arrival_time,
-                            is_late=is_late
-                        )
-                        
-                        time_str = arrival_time.strftime("%H:%M:%S")
-                        status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
-                        recognized_students.append(f"{student.name}{status}")
-                    else:
-                        original_time = existing_record.arrival_time.strftime("%H:%M:%S") if hasattr(existing_record, 'arrival_time') and existing_record.arrival_time else existing_record.time.strftime("%H:%M:%S")
-                        recognized_students.append(f"{student.name} (Already marked at {original_time})")
+                    time_str = arrival_time.strftime("%H:%M:%S")
+                    status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
+                    status_messages.append(f"{student.name}{status}")
+                else:
+                    original_time = existing_record.arrival_time.strftime("%H:%M:%S") if hasattr(existing_record, 'arrival_time') and existing_record.arrival_time else existing_record.time.strftime("%H:%M:%S")
+                    status_messages.append(f"{student.name} (Already marked at {original_time})")
+            
 
             total_attendance = AttendanceRecord.objects.filter(session=session).count()
             total_students = session.class_session.students.filter(is_active=True).count()
 
-            message = f"Attendance taken for {session.name} ({session.class_session.name}): {', '.join(recognized_students) if recognized_students else 'No match'}"
+            message = f"Attendance taken for {session.name} ({session.class_session.name}): {', '.join(status_messages) if status_messages else 'No match'}"
             
             return JsonResponse({
                 "message": message, 
@@ -1423,6 +1580,7 @@ def generate_export_file(export_type, date_from=None, date_to=None, report_title
 #new
 
 
+@csrf_exempt
 def signup_view(request):
     if request.method == 'POST':
         try:

@@ -419,6 +419,40 @@
             font-size: 1.1rem;
         }
         
+        .no-classes-message {
+            text-align: center;
+            padding: 2rem;
+            background: var(--light-gray);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        
+        .no-classes-message p {
+            margin: 0 0 1rem 0;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .create-class-btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        
+        .create-class-btn:hover {
+            background: #2563eb;
+            color: white;
+            transform: translateY(-1px);
+        }
+        
         .loading {
             display: flex;
             align-items: center;
@@ -534,6 +568,7 @@
                 <div id="emptyClasses" class="empty-state" style="display: none;">
                     <h3>No Classes Found</h3>
                     <p>You haven't created any classes yet. Click "Create Class" to get started.</p>
+                    <button class="create-class-btn" onclick="switchToCreateClassTab()" style="margin-top: 1rem;">Create Class</button>
                 </div>
             </div>
         </div>
@@ -598,7 +633,12 @@
                 
                 <div id="sessionAlert" class="alert"></div>
                 
-                <form id="createSessionForm">
+                <div id="noClassesMessage" class="no-classes-message" style="display: none;">
+                    <p>No classes available. You need to create a class first before you can create sessions.</p>
+                    <button class="create-class-btn" onclick="switchToCreateClassTab()">Create Class</button>
+                </div>
+                
+                <form id="createSessionForm" style="display: none;">
                     <div class="form-grid">
                         <div class="form-group">
                             <label for="sessionName">Session Name *</label>
@@ -819,6 +859,11 @@
                     document.getElementById('teacherName').textContent = currentTeacher.name || currentTeacher.username;
                     
                     renderClasses();
+                    
+                    // Update session dropdown if we're on the session tab
+                    if (document.getElementById('session').classList.contains('active')) {
+                        populateClassDropdown();
+                    }
                 } else {
                     throw new Error(data.error || 'Failed to load classes');
                 }
@@ -924,6 +969,11 @@
                     if (data.class_data) {
                         classes.push(data.class_data);
                         renderClasses();
+                        
+                        // Update session dropdown if we're on the session tab
+                        if (document.getElementById('session').classList.contains('active')) {
+                            populateClassDropdown();
+                        }
                     }
                     
                     // Switch to classes tab after 1.5 seconds
@@ -1005,9 +1055,19 @@
             alert('Class details view - Coming soon! Class ID: ' + classId);
         }
 
+        function switchToCreateClassTab() {
+            // Find and click the create class tab
+            const createTab = document.querySelector('[data-tab="create"]');
+            if (createTab) {
+                createTab.click();
+            }
+        }
+
         // Populate class dropdown for session creation
         function populateClassDropdown() {
             const classSelect = document.getElementById('sessionClass');
+            const noClassesMessage = document.getElementById('noClassesMessage');
+            const createSessionForm = document.getElementById('createSessionForm');
             
             // Clear existing options except the first one
             classSelect.innerHTML = '<option value="">Choose a class...</option>';
@@ -1019,6 +1079,14 @@
                     option.textContent = `${cls.name} (${cls.code})`;
                     classSelect.appendChild(option);
                 });
+                
+                // Show form, hide no classes message
+                noClassesMessage.style.display = 'none';
+                createSessionForm.style.display = 'block';
+            } else {
+                // Show no classes message, hide form
+                noClassesMessage.style.display = 'block';
+                createSessionForm.style.display = 'none';
             }
         }
 
