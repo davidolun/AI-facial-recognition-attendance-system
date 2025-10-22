@@ -1,3 +1,9 @@
+databases:
+  - name: attendance-db
+    databaseName: attendance
+    user: attendance
+    plan: free
+
 services:
   - type: web
     name: attendance-system
@@ -18,3 +24,7 @@ services:
         generateValue: true
       - key: OPENAI_API_KEY
         sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: attendance-db
+          property: connectionString
