@@ -11,6 +11,14 @@ import datetime
 import json
 import cloudinary
 import cloudinary.uploader
+from cloudinary import config as cloudinary_config
+
+# Configure Cloudinary
+cloudinary_config(
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', 'duu7pc7s3'),
+    api_key=os.getenv('CLOUDINARY_API_KEY', '625655631397579'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET', 'HEE8Or7rvr7SBOv61t5CWsSRUIs')
+)
 
 # Try to import image processing libraries, with fallback
 try:
@@ -375,9 +383,9 @@ def add_student(request):
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
             
-            # Save to Cloudinary in production, local in development
-            if not settings.DEBUG:
-                # Upload to Cloudinary
+            # Try to upload to Cloudinary first, fallback to local storage
+            try:
+                logger.info(f"Attempting to upload {filename} to Cloudinary...")
                 img_byte_arr = io.BytesIO()
                 image.save(img_byte_arr, format='JPEG', quality=95)
                 img_byte_arr.seek(0)
@@ -389,12 +397,15 @@ def add_student(request):
                     resource_type="image"
                 )
                 relative_path = upload_result['secure_url']
-            else:
-                # Save locally in development
+                logger.info(f"Successfully uploaded to Cloudinary: {relative_path}")
+            except Exception as cloudinary_error:
+                # Fallback to local storage if Cloudinary fails
+                logger.warning(f"Cloudinary upload failed: {cloudinary_error}. Saving locally...")
                 file_path = os.path.join(settings.MEDIA_ROOT, 'students', filename)
                 os.makedirs(os.path.dirname(file_path), exist_ok=True)
                 image.save(file_path, 'JPEG', quality=95)
                 relative_path = os.path.join('students', filename)
+                logger.info(f"Saved locally: {relative_path}")
 
             # Create student record
             student = Student.objects.create(
