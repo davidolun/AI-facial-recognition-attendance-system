@@ -9,6 +9,8 @@ from django.conf import settings
 import os
 import datetime
 import json
+import cloudinary
+import cloudinary.uploader
 
 # Try to import image processing libraries, with fallback
 try:
@@ -56,6 +58,26 @@ def detect_faces_opencv(image_array):
     except Exception as e:
         print(f"Face detection error: {e}")
         return []
+
+def load_image_from_path_or_url(image_path):
+    """Load image from either local path or Cloudinary URL"""
+    try:
+        if image_path.startswith('http://') or image_path.startswith('https://'):
+            # Load from URL (Cloudinary)
+            import requests
+            response = requests.get(image_path)
+            img_array = np.asarray(bytearray(response.content), dtype=np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            return img
+        else:
+            # Load from local path
+            full_path = os.path.join(settings.MEDIA_ROOT, image_path)
+            if os.path.exists(full_path):
+                return cv2.imread(full_path)
+            return None
+    except Exception as e:
+        print(f"Error loading image: {e}")
+        return None
 
 def extract_face_features(image_array, face_box):
     """Extract basic face features using OpenCV"""
@@ -341,12 +363,8 @@ def add_student(request):
             # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{student_name.lower().replace(' ', '_')}_{timestamp}.jpg"
-            file_path = os.path.join(settings.MEDIA_ROOT, 'students', filename)
             
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-            
-            # Convert to RGB if needed and save image
+            # Convert to RGB if needed
             if image.mode in ('RGBA', 'LA', 'P'):
                 # Create a white background for transparent images
                 background = Image.new('RGB', image.size, (255, 255, 255))
@@ -357,8 +375,26 @@ def add_student(request):
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
             
-            image.save(file_path, 'JPEG', quality=95)
-            relative_path = os.path.join('students', filename)
+            # Save to Cloudinary in production, local in development
+            if not settings.DEBUG:
+                # Upload to Cloudinary
+                img_byte_arr = io.BytesIO()
+                image.save(img_byte_arr, format='JPEG', quality=95)
+                img_byte_arr.seek(0)
+                
+                upload_result = cloudinary.uploader.upload(
+                    img_byte_arr,
+                    folder="attendance_students",
+                    public_id=filename.replace('.jpg', ''),
+                    resource_type="image"
+                )
+                relative_path = upload_result['secure_url']
+            else:
+                # Save locally in development
+                file_path = os.path.join(settings.MEDIA_ROOT, 'students', filename)
+                os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                image.save(file_path, 'JPEG', quality=95)
+                relative_path = os.path.join('students', filename)
 
             # Create student record
             student = Student.objects.create(
@@ -427,10 +463,9 @@ def take_attendance_enhanced(request):
             student_objects = []
 
             for student in students:
-                # Convert relative path to full path
-                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
-                if os.path.exists(full_image_path):
-                    student_image_paths.append(full_image_path)
+                student_img = load_image_from_path_or_url(student.image_path)
+                if student_img is not None:
+                    student_image_paths.append(student.image_path)
                     student_objects.append(student)
 
             recognized_students = []
@@ -440,10 +475,9 @@ def take_attendance_enhanced(request):
             # Extract features for students
             student_features = []
             for student in students:
-                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
-                if os.path.exists(full_image_path):
+                student_img = load_image_from_path_or_url(student.image_path)
+                if student_img is not None:
                     try:
-                        student_img = cv2.imread(full_image_path)
                         student_faces = detect_faces_opencv(student_img)
                         if student_faces:
                             features = extract_face_features(student_img, student_faces[0])
@@ -992,10 +1026,9 @@ def take_attendance_with_session(request):
             student_objects = []
 
             for student in students:
-                # Convert relative path to full path
-                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
-                if os.path.exists(full_image_path):
-                    student_image_paths.append(full_image_path)
+                student_img = load_image_from_path_or_url(student.image_path)
+                if student_img is not None:
+                    student_image_paths.append(student.image_path)
                     student_objects.append(student)
 
             recognized_students = []
@@ -1004,10 +1037,9 @@ def take_attendance_with_session(request):
             # Extract features for students
             student_features = []
             for student in students:
-                full_image_path = os.path.join(settings.MEDIA_ROOT, student.image_path)
-                if os.path.exists(full_image_path):
+                student_img = load_image_from_path_or_url(student.image_path)
+                if student_img is not None:
                     try:
-                        student_img = cv2.imread(full_image_path)
                         student_faces = detect_faces_opencv(student_img)
                         if student_faces:
                             features = extract_face_features(student_img, student_faces[0])

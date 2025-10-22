@@ -11,3 +11,6 @@ opencv-python-headless==4.11.0.86
 openai==1.102.0
 openpyxl==3.1.5
 python-docx==1.2.0
+cloudinary==1.41.0
+django-cloudinary-storage==0.3.0
+requests==2.32.3
