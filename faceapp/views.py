@@ -416,6 +416,12 @@ def add_student(request):
                 image_path=relative_path
             )
 
+            # Automatically add student to all classes of the logged-in teacher
+            teacher_classes = Class.objects.filter(teacher=request.user, is_active=True)
+            if teacher_classes.exists():
+                student.classes.add(*teacher_classes)
+                logger.info(f"Student {student_name} automatically added to {teacher_classes.count()} classes of teacher {request.user.username}")
+
             processing_time = time.time() - start_time
             logger.info(f"Student {student_name} added successfully in {processing_time:.2f}s by user {request.user.username}")
             
@@ -1419,10 +1425,29 @@ def dashboard(request):
     """
     start_time = time.time()
     logger.info(f"User {request.user.username} accessed dashboard")
-    response = render(request, 'dashboard.html')
+    
+    # Check if user needs onboarding
+    needs_onboarding = not request.user.onboarding_completed
+    
+    response = render(request, 'dashboard.html', {
+        'needs_onboarding': needs_onboarding
+    })
     performance_logger.info(f"Dashboard load time: {time.time() - start_time:.2f}s for user {request.user.username}")
     return response
 
+
+@login_required
+@csrf_exempt
+def mark_onboarding_complete(request):
+    """Mark onboarding as completed for the current user"""
+    if request.method == 'POST':
+        try:
+            request.user.onboarding_completed = True
+            request.user.save()
+            return JsonResponse({'success': True, 'message': 'Onboarding marked as complete'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 @login_required
 @csrf_exempt
@@ -1638,24 +1663,64 @@ def signup_view(request):
             department = data.get('department', '').strip()
             employee_id = data.get('employee_id', '').strip()
             
-            # Validation
-            if not all([username, email, password, first_name, last_name]):
-                return JsonResponse({'error': 'Please fill in all required fields'}, status=400)
+            # Enhanced validation with specific error messages
+            validation_errors = []
+            
+            # Required fields validation
+            if not username:
+                validation_errors.append('Username is required')
+            elif len(username) < 3:
+                validation_errors.append('Username must be at least 3 characters long')
+            elif not username.replace('_', '').replace('-', '').isalnum():
+                validation_errors.append('Username can only contain letters, numbers, hyphens, and underscores')
+            
+            if not email:
+                validation_errors.append('Email address is required')
+            elif '@' not in email or '.' not in email.split('@')[-1]:
+                validation_errors.append('Please enter a valid email address')
+            
+            if not first_name:
+                validation_errors.append('First name is required')
+            elif len(first_name.strip()) < 2:
+                validation_errors.append('First name must be at least 2 characters long')
+            
+            if not last_name:
+                validation_errors.append('Last name is required')
+            elif len(last_name.strip()) < 2:
+                validation_errors.append('Last name must be at least 2 characters long')
+            
+            if not department:
+                validation_errors.append('Department is required')
+            elif len(department.strip()) < 2:
+                validation_errors.append('Department must be at least 2 characters long')
+            
+            if not password:
+                validation_errors.append('Password is required')
+            elif len(password) < 8:
+                validation_errors.append('Password must be at least 8 characters long')
+            elif not any(c.isupper() for c in password):
+                validation_errors.append('Password must contain at least one uppercase letter')
+            elif not any(c.islower() for c in password):
+                validation_errors.append('Password must contain at least one lowercase letter')
+            elif not any(c.isdigit() for c in password):
+                validation_errors.append('Password must contain at least one number')
             
             if password != confirm_password:
-                return JsonResponse({'error': 'Passwords do not match'}, status=400)
+                validation_errors.append('Passwords do not match')
             
-            if len(password) < 8:
-                return JsonResponse({'error': 'Password must be at least 8 characters long'}, status=400)
+            # Check for existing users
+            if username and Teacher.objects.filter(username=username).exists():
+                validation_errors.append('Username already exists. Please choose a different username.')
             
-            if Teacher.objects.filter(username=username).exists():
-                return JsonResponse({'error': 'Username already exists'}, status=400)
-            
-            if Teacher.objects.filter(email=email).exists():
-                return JsonResponse({'error': 'Email already registered'}, status=400)
+            if email and Teacher.objects.filter(email=email).exists():
+                validation_errors.append('Email address is already registered. Please use a different email.')
             
             if employee_id and Teacher.objects.filter(employee_id=employee_id).exists():
-                return JsonResponse({'error': 'Employee ID already exists'}, status=400)
+                validation_errors.append('Employee ID already exists. Please use a different employee ID.')
+            
+            # Return validation errors if any
+            if validation_errors:
+                return JsonResponse({'error': validation_errors[0]}, status=400)
             
             # Create teacher account
             with transaction.atomic():
@@ -1754,6 +1819,12 @@ def create_class(request):
                 academic_year=academic_year,
                 semester=semester
             )
+
+            # Automatically add all existing students to the new class
+            existing_students = Student.objects.filter(classes__teacher=request.user).distinct()
+            if existing_students.exists():
+                new_class.students.add(*existing_students)
+                logger.info(f"Class {name} automatically added {existing_students.count()} existing students")
             
             return JsonResponse({
                 'message': f'Class "{name}" created successfully!',
@@ -1762,7 +1833,7 @@ def create_class(request):
                     'id': new_class.id,
                     'name': new_class.name,
                     'code': new_class.code,
-                    'student_count': 0
+                    'student_count': new_class.students.count()
                 }
             })
             
@@ -1960,3 +2031,7 @@ def analyze_trends(data):
         'weekly_pattern': 'strong',
         'seasonal_effect': 'moderate'
     }
+
+def test_onboarding(request):
+    """Test page for onboarding system"""
+    return render(request, 'test_onboarding.html')

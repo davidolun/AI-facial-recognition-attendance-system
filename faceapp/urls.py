@@ -31,4 +31,6 @@ urlpatterns = [
     path('dashboard/', views.dashboard, name='dashboard'),
     path('dashboard_data/', views.dashboard_data, name='dashboard_data'),
     path('export_data/', views.export_data, name='export_data'),
+    path('mark_onboarding_complete/', views.mark_onboarding_complete, name='mark_onboarding_complete'),
+    path('test_onboarding/', views.test_onboarding, name='test_onboarding'),
 ]

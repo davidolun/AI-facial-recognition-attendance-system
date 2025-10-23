@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -242,6 +243,8 @@
   </style>
 </head>
 <body>
+  {% include 'includes/sidebar.html' %}
+
   <div class="wrap">
     <div class="nav-links">
       {% if user.is_authenticated %}
@@ -549,6 +552,21 @@ async function startCamera() {
         statusEl.textContent = `Camera is live for ${selectedSession.name}. Face detection active.`;
         statusEl.className = 'status success';
         
+        // ✨ TRIGGER ONBOARDING EVENT FOR CAMERA STARTED ✨
+        console.log('=== DISPATCHING CAMERA STARTED EVENT ===');
+        console.log('Camera started successfully, dispatching event...');
+        const event = new CustomEvent('cameraStarted', {
+            detail: { 
+                sessionName: selectedSession.name,
+                sessionId: selectedSession.id
+            },
+            bubbles: true,
+            cancelable: true
+        });
+        document.dispatchEvent(event);
+        window.dispatchEvent(event); // Added window dispatch for robustness
+        console.log('cameraStarted event dispatched successfully');
+        
         // Show helpful instructions for better face recognition
         setTimeout(() => {
             statusEl.innerHTML = `
@@ -687,6 +705,22 @@ function captureFrame() {
             statusEl.textContent = data.message;
             statusEl.className = 'status success';
             
+            // ✨ TRIGGER ONBOARDING EVENT FOR ATTENDANCE TAKEN ✨
+            console.log('=== DISPATCHING ATTENDANCE TAKEN EVENT ===');
+            console.log('Attendance taken successfully, dispatching event...');
+            const event = new CustomEvent('attendanceTaken', {
+                detail: { 
+                    message: data.message,
+                    attendanceCount: data.attendance_count || 0,
+                    totalStudents: data.total_students || 0
+                },
+                bubbles: true,
+                cancelable: true
+            });
+            document.dispatchEvent(event);
+            window.dispatchEvent(event); // Added window dispatch for robustness
+            console.log('attendanceTaken event dispatched successfully');
+            
             // Extract student names from the message for TTS
             const message = data.message;
             if (message.includes("Attendance taken:")) {
@@ -752,7 +786,12 @@ function getCookie(name) {
 }
 
 // Event listeners
-sessionSelect.addEventListener('change', updateSessionInfo);
+sessionSelect.addEventListener('change', function() {
+    console.log('🎯 DROPDOWN CHANGE EVENT FIRED!');
+    console.log('Selected value:', sessionSelect.value);
+    console.log('About to call updateSessionInfo...');
+    updateSessionInfo();
+});
 startBtn.addEventListener('click', startCamera);
 stopBtn.addEventListener('click', stopCamera);
 captureBtn.addEventListener('click', captureFrame);
@@ -760,6 +799,166 @@ window.addEventListener('resize', resizeOverlay);
 
 // Initialize
 loadSessions();
+
+// Test function to manually trigger sessionSelected event
+window.testSessionSelected = function() {
+    console.log('🧪 TESTING: Manually dispatching sessionSelected event');
+    const event = new CustomEvent('sessionSelected', {
+        detail: { 
+            sessionId: 'test123',
+            sessionName: 'Test Session'
+        },
+        bubbles: true,
+        cancelable: true
+    });
+    document.dispatchEvent(event);
+    console.log('✅ Test event dispatched');
+};
+
+// ============================================
+// ONBOARDING EVENT TRIGGERS
+// ============================================
+
+// 1. SESSION SELECTION EVENT
+// Wrap your existing updateSessionInfo to add onboarding trigger
+const originalUpdateSessionInfo = updateSessionInfo;
+updateSessionInfo = function() {
+    console.log('🔄 updateSessionInfo called - wrapper function');
+    console.log('Session select value before:', sessionSelect.value);
+    console.log('Selected session before:', selectedSession);
+    
+    // Call original function first
+    originalUpdateSessionInfo();
+    
+    console.log('🔄 After calling original updateSessionInfo');
+    console.log('Session select value after:', sessionSelect.value);
+    console.log('Selected session after:', selectedSession);
+    
+    // Now check if a session was selected (after selectedSession has been set)
+    const sessionId = sessionSelect.value;
+    
+    console.log('🔍 Checking session selection conditions:');
+    console.log('- Session ID exists:', !!sessionId);
+    console.log('- Session ID value:', sessionId);
+    console.log('- Selected session exists:', !!selectedSession);
+    console.log('- Selected session name:', selectedSession?.name);
+    console.log('- Onboarding system exists:', !!window.onboardingSystem);
+    console.log('- Onboarding system active:', window.onboardingSystem?.isActive);
+    
+    // If a session was selected (not empty) and selectedSession is now set
+    if (sessionId && selectedSession) {
+        console.log('✅ All conditions met! Dispatching sessionSelected event for onboarding');
+        console.log('Selected session:', selectedSession.name);
+        
+        const event = new CustomEvent('sessionSelected', {
+            detail: { 
+                sessionId: sessionId,
+                sessionName: selectedSession.name
+            },
+            bubbles: true,
+            cancelable: true
+        });
+        
+        console.log('📤 Dispatching event:', event);
+        document.dispatchEvent(event);
+        console.log('✅ Event dispatched successfully');
+        
+        // Auto-scroll to Start Camera button for onboarding
+        setTimeout(() => {
+            const startCameraBtn = document.getElementById('start');
+            console.log('🔍 Looking for start camera button:', startCameraBtn);
+            if (startCameraBtn && window.onboardingSystem && window.onboardingSystem.isActive) {
+                console.log('📜 Auto-scrolling to start camera button');
+                startCameraBtn.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'center' 
+                });
+            } else {
+                console.log('⚠️ Cannot auto-scroll - button not found or onboarding not active');
+            }
+        }, 800);
+    } else {
+        console.log('❌ Session selection conditions not met:');
+        console.log('- Session ID:', sessionId);
+        console.log('- Selected session:', selectedSession);
+        console.log('- Missing session ID:', !sessionId);
+        console.log('- Missing selected session:', !selectedSession);
+    }
+};
+
+// 2. CAMERA START EVENT
+// Wrap your existing startCamera to add onboarding trigger
+const originalStartCamera = startCamera;
+startCamera = async function() {
+    try {
+        // Call original function
+        await originalStartCamera();
+        
+        // After camera successfully starts, trigger onboarding event
+        console.log('🎯 Dispatching cameraStarted event');
+        document.dispatchEvent(new CustomEvent('cameraStarted', {
+            detail: { 
+                cameraActive: true,
+                sessionId: selectedSession?.id
+            }
+        }));
+        
+    } catch (error) {
+        console.error('Camera start error:', error);
+        throw error;
+    }
+};
+
+// 3. ATTENDANCE TAKEN EVENT
+// Wrap your existing captureFrame to add onboarding trigger
+const originalCaptureFrame = captureFrame;
+captureFrame = function() {
+    // Store reference to check for success later
+    const originalFetch = window.fetch;
+    
+    // Temporarily override fetch to detect successful attendance
+    window.fetch = function(...args) {
+        const promise = originalFetch.apply(this, args);
+        
+                        // Only intercept the take_attendance_with_session endpoint
+        if (args[0] === '/take_attendance_with_session/') {
+            promise.then(response => {
+                return response.clone().json().then(data => {
+                    // Check if attendance was successfully taken
+                    if (!data.error && data.message && data.message.includes('Attendance taken')) {
+                        console.log('🎯 Dispatching attendanceTaken event');
+                        console.log('📝 Full message:', data.message);
+                        document.dispatchEvent(new CustomEvent('attendanceTaken', {
+                            detail: { 
+                                success: true,
+                                message: data.message, // Include the full message with student name
+                                sessionId: selectedSession?.id,
+                                attendanceCount: data.attendance_count,
+                                timestamp: new Date().toISOString()
+                            }
+                        }));
+                    }
+                    
+                    // Restore original fetch
+                    window.fetch = originalFetch;
+                    
+                    return response;
+                });
+            });
+        }
+        
+        return promise;
+    };
+    
+    // Call original function
+    originalCaptureFrame();
+};
+
+console.log('✅ Onboarding event triggers initialized for attendance page');
+
   </script>
+  
+  <!-- Onboarding System -->
+  <script src="{% static 'js/onboarding.js' %}"></script>
 </body>
 </html>

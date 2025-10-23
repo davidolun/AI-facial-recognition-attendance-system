@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Class Management - Attendance System</title>
     <style>
+        @keyframes pulse {
+            0% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); }
+            50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.8); }
+            100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); }
+        }
+        
         :root { 
             --primary: #3b82f6; 
             --success: #22c55e; 
@@ -528,6 +535,8 @@
     </style>
 </head>
 <body>
+    {% include 'includes/sidebar.html' %}
+    
     <div class="header">
         <div class="header-content">
             <h1>Class Management</h1>
@@ -964,27 +973,49 @@
                 
                 if (response.ok) {
                     showAlert('createAlert', data.message, 'success');
-                    
-                    // Reset form
-                    document.getElementById('createClassForm').reset();
-                    
-                    // Add new class to list
-                    if (data.class_data) {
-                        classes.push(data.class_data);
-                        renderClasses();
-                        
-                        // Update session dropdown if we're on the session tab
-                        if (document.getElementById('session').classList.contains('active')) {
-                            populateClassDropdown();
-                        }
-                    }
-                    
-                    // Switch to classes tab after 1.5 seconds
-                    setTimeout(() => {
-                        document.querySelector('[data-tab="classes"]').click();
-                    }, 1500);
+    
+    // Reset form
+    document.getElementById('createClassForm').reset();
+    
+    // Add new class to list
+    if (data.class_data) {
+        classes.push(data.class_data);
+        renderClasses();
+        
+        // Update session dropdown if we're on the session tab
+        if (document.getElementById('session').classList.contains('active')) {
+            populateClassDropdown();
+        }
+    }
+    
+    // ✨ TRIGGER ONBOARDING EVENT ✨
+    document.dispatchEvent(new CustomEvent('classCreated'));
+    
+    // Switch to classes tab after 1.5 seconds
+    setTimeout(() => {
+        document.querySelector('[data-tab="classes"]').click();
+    }, 1500);
                     
                 } else {
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
                     showAlert('createAlert', data.error || 'Failed to create class', 'error');
                 }
             } catch (error) {
@@ -1121,64 +1152,69 @@
 
         // Create session form
         document.getElementById('createSessionForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const formData = {
-                name: document.getElementById('sessionName').value.trim(),
-                class_id: document.getElementById('sessionClass').value,
-                date: document.getElementById('sessionDate').value,
-                start_time: document.getElementById('startTime').value,
-                end_time: document.getElementById('endTime').value.trim()
-            };
-            
-            if (!formData.name || !formData.class_id || !formData.date || !formData.start_time) {
-                showAlert('sessionAlert', 'Please fill in all required fields', 'error');
-                return;
-            }
-            
-            // Validate that end time is after start time if provided
-            if (formData.end_time && formData.end_time <= formData.start_time) {
-                showAlert('sessionAlert', 'End time must be after start time', 'error');
-                return;
-            }
-            
-            setSessionLoading(true);
-            
-            try {
-                const response = await fetch('/create_session/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify(formData)
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showAlert('sessionAlert', data.message, 'success');
-                    
-                    // Reset form
-                    document.getElementById('createSessionForm').reset();
-                    setDefaultSessionDate();
-                    
-                    // Switch to classes tab after 2 seconds
-                    setTimeout(() => {
-                        document.querySelector('[data-tab="classes"]').click();
-                    }, 2000);
-                    
-                } else {
-                    showAlert('sessionAlert', data.error || 'Failed to create session', 'error');
-                }
-            } catch (error) {
-                console.error('Error creating session:', error);
-                showAlert('sessionAlert', 'Network error. Please try again.', 'error');
-            } finally {
-                setSessionLoading(false);
-            }
+    e.preventDefault();
+    
+    const formData = {
+        name: document.getElementById('sessionName').value.trim(),
+        class_id: document.getElementById('sessionClass').value,
+        date: document.getElementById('sessionDate').value,
+        start_time: document.getElementById('startTime').value,
+        end_time: document.getElementById('endTime').value.trim()
+    };
+    
+    if (!formData.name || !formData.class_id || !formData.date || !formData.start_time) {
+        showAlert('sessionAlert', 'Please fill in all required fields', 'error');
+        return;
+    }
+    
+    // Validate that end time is after start time if provided
+    if (formData.end_time && formData.end_time <= formData.start_time) {
+        showAlert('sessionAlert', 'End time must be after start time', 'error');
+        return;
+    }
+    
+    setSessionLoading(true);
+    
+    try {
+        const response = await fetch('/create_session/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(formData)
         });
-
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showAlert('sessionAlert', data.message, 'success');
+            
+            // Reset form
+            document.getElementById('createSessionForm').reset();
+            setDefaultSessionDate();
+            
+            // ✨ TRIGGER ONBOARDING EVENT ✨
+            console.log('🎯 Dispatching sessionCreated event');
+            document.dispatchEvent(new CustomEvent('sessionCreated', {
+                detail: { sessionName: formData.name, classId: formData.class_id }
+            }));
+            
+            // Switch to classes tab after 2 seconds
+            setTimeout(() => {
+                document.querySelector('[data-tab="classes"]').click();
+            }, 2000);
+            
+        } else {
+            showAlert('sessionAlert', data.error || 'Failed to create session', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating session:', error);
+        showAlert('sessionAlert', 'Network error. Please try again.', 'error');
+    } finally {
+        setSessionLoading(false);
+    }
+});
         function setSessionLoading(loading) {
             const btn = document.querySelector('#createSessionForm button[type="submit"]');
             const text = document.getElementById('sessionBtnText');
@@ -1664,5 +1700,8 @@
         });
 
     </script>
+    
+    <!-- Onboarding System -->
+    <script src="{% static 'js/onboarding.js' %}"></script>
 </body>
 </html>

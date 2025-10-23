@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,6 +35,7 @@
             display: flex;
             gap: 1rem;
             flex-wrap: wrap;
+            align-items: center;
         }
         
         .nav-links a {
@@ -426,6 +428,8 @@
     </style>
 </head>
 <body>
+    {% include 'includes/sidebar.html' %}
+
     <div class="dashboard-container">
         <!-- Navigation Links -->
         <div class="nav-links">
@@ -435,11 +439,23 @@
             <a href="/advanced_analytics/">📈 Advanced Analytics</a>
             <a href="/class_management/">👥 Class Management</a>
             <a href="/ai_assistant/">🤖 AI Assistant</a>
+            <button onclick="startOnboarding()" style="background: #10b981; color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
+                🎯 Start Tour
+            </button>
         </div>
         
         <!-- Header -->
         <h1>📊 Attendance Dashboard</h1>
         <p style="margin-bottom: 1.5rem; color: #9ca3af;">Simple attendance tracking and analytics</p>
+        
+        <!-- Welcome Banner for New Users -->
+        <div id="welcome-banner" style="display: none; background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; padding: 1rem; border-radius: 12px; margin-bottom: 1.5rem; text-align: center;">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1.2rem;">🎉 Welcome to Smart Attendance!</h3>
+            <p style="margin: 0 0 1rem 0; opacity: 0.9;">Get started with our quick tour to learn how to use the system effectively.</p>
+            <button onclick="startOnboarding()" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 0.5rem 1rem; border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                🎯 Start Quick Tour
+            </button>
+        </div>
 
 
 
@@ -1269,6 +1285,42 @@
                 block: 'start' 
             });
         }
+    </script>
+    
+    <!-- Onboarding System -->
+    <script src="{% static 'js/onboarding.js' %}"></script>
+    
+    <script>
+        // Auto-start onboarding for new users
+        document.addEventListener('DOMContentLoaded', function() {
+            const welcomeBanner = document.getElementById('welcome-banner');
+            const hasCompletedOnboarding = localStorage.getItem('onboarding_completed') === 'true';
+            const needsOnboarding = {{ needs_onboarding|yesno:"true,false" }};
+            
+            console.log('Dashboard loaded - needs_onboarding:', needsOnboarding);
+            console.log('localStorage onboarding_completed:', hasCompletedOnboarding);
+            
+            // Show welcome banner for new users
+            if (!hasCompletedOnboarding) {
+                welcomeBanner.style.display = 'block';
+            }
+            
+            // Auto-start onboarding for new users
+            if (needsOnboarding) {
+                console.log('🚀 Auto-starting onboarding for new user (server-side flag)');
+                setTimeout(() => {
+                    if (typeof window.startOnboarding === 'function') {
+                        window.startOnboarding(false); // Don't clear localStorage for auto-start
+                    } else {
+                        console.error('startOnboarding function not available');
+                    }
+                }, 1000); // Small delay to ensure everything is loaded
+            }
+            
+            // Debug: Check if startOnboarding function exists
+            console.log('Dashboard loaded - startOnboarding function:', typeof window.startOnboarding);
+            console.log('Onboarding system:', window.onboardingSystem);
+        });
     </script>
 </body>
 </html>  

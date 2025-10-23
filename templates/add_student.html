@@ -198,6 +198,8 @@
   </style>
 </head>
 <body>
+  {% include 'includes/sidebar.html' %}
+  
   <div class="wrap">
     <div class="nav-links">
       <a href="/">📷 Take Attendance</a>
@@ -252,6 +254,9 @@
     <canvas id="canvas" style="display:none;"></canvas>
   </div>
 
+  <!-- Include Onboarding System -->
+  <script src="/static/js/onboarding.js"></script>
+
   <script>
     const video = document.getElementById("webcam");
     const canvas = document.getElementById("canvas");
@@ -260,6 +265,27 @@
     const captureBtn = document.getElementById("capture");
     const statusEl = document.getElementById("status");
     let stream;
+
+    // Function to dispatch studentAdded event (single dispatch only)
+    function dispatchStudentAddedEvent(name, studentId) {
+      console.log('=== DISPATCHING STUDENT ADDED EVENT ===');
+      console.log('Student Name:', name);
+      console.log('Student ID:', studentId);
+      
+      const eventDetail = { 
+        studentName: name, 
+        studentId: studentId 
+      };
+      
+      // Dispatch only once
+      const event = new CustomEvent('studentAdded', {
+        detail: eventDetail,
+        bubbles: true,
+        cancelable: true
+      });
+      document.dispatchEvent(event);
+      console.log('✅ studentAdded event dispatched');
+    }
 
     async function startCamera() {
       try {
@@ -346,13 +372,16 @@
           statusEl.textContent = data.message;
           statusEl.className = "status success";
           
+          // ✨ TRIGGER ONBOARDING EVENT WITH MULTIPLE ATTEMPTS ✨
+          dispatchStudentAddedEvent(name, studentId);
+          
           // Clear form after successful addition
           document.getElementById("studentName").value = "";
           document.getElementById("studentId").value = "";
           document.getElementById("email").value = "";
           document.getElementById("phone").value = "";
           
-          // Stop camera
+          // Stop camera after a delay
           setTimeout(() => {
             stopCamera();
           }, 2000);
@@ -385,6 +414,10 @@
     
     // Focus on name input
     document.getElementById("studentName").focus();
+    
+    // Log when page loads to help debug
+    console.log('Add Student page loaded');
+    console.log('Onboarding system present:', !!window.onboardingSystem);
   </script>
 </body>
 </html>

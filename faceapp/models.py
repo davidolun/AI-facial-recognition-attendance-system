@@ -10,6 +10,7 @@ class Teacher(AbstractUser):
     department = models.CharField(max_length=100, blank=True, null=True)
     employee_id = models.CharField(max_length=20, unique=True, blank=True, null=True)
     is_admin = models.BooleanField(default=False)  # For system administrators
+    onboarding_completed = models.BooleanField(default=False)  # Track if user completed onboarding
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

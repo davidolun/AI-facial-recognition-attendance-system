@@ -92,6 +92,12 @@
             color: var(--error);
         }
         
+        .optional {
+            color: var(--gray);
+            font-size: 0.8rem;
+            font-weight: 400;
+        }
+        
         .submit-btn {
             width: 100%;
             padding: 0.875rem;
@@ -157,6 +163,13 @@
             background: rgba(239, 68, 68, 0.1);
             color: #dc2626;
             border: 1px solid rgba(239, 68, 68, 0.3);
+            animation: errorPulse 0.5s ease-in-out;
+        }
+        
+        @keyframes errorPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
         }
         
         .login-link {
@@ -247,20 +260,20 @@
                 <input type="email" id="email" name="email" required>
             </div>
             
+            <div class="form-group">
+                <label for="department">Department <span class="required">*</span></label>
+                <input type="text" id="department" name="department" placeholder="Mathematics" required>
+            </div>
+            
             <div class="form-row">
                 <div class="form-group">
-                    <label for="phone">Phone Number</label>
+                    <label for="phone">Phone Number <span class="optional">(Optional)</span></label>
                     <input type="text" id="phone" name="phone" placeholder="(555) 123-4567">
                 </div>
                 <div class="form-group">
-                    <label for="employee_id">Employee ID</label>
+                    <label for="employee_id">Employee ID <span class="optional">(Optional)</span></label>
                     <input type="text" id="employee_id" name="employee_id" placeholder="EMP001">
                 </div>
-            </div>
-            
-            <div class="form-group">
-                <label for="department">Department</label>
-                <input type="text" id="department" name="department" placeholder="Mathematics">
             </div>
             
             <div class="form-group">
@@ -347,6 +360,18 @@
             alert.className = `alert ${type}`;
             alert.style.display = 'block';
             
+            // Scroll to top to show the error message
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+            
+            // Focus on the alert for screen readers and keyboard navigation
+            if (type === 'error') {
+                alert.setAttribute('tabindex', '-1');
+                alert.focus();
+            }
+            
             if (type === 'success') {
                 setTimeout(() => {
                     alert.style.display = 'none';
@@ -384,28 +409,68 @@
             return cookieValue;
         }
 
-        // Form validation
+        // Enhanced form validation
         function validateForm(formData) {
             const errors = [];
             
-            if (!formData.first_name.trim()) errors.push('First name is required');
-            if (!formData.last_name.trim()) errors.push('Last name is required');
-            if (!formData.username.trim()) errors.push('Username is required');
-            if (!formData.email.trim()) errors.push('Email is required');
-            if (!formData.password) errors.push('Password is required');
-            if (!formData.confirm_password) errors.push('Password confirmation is required');
-            
-            if (formData.password !== formData.confirm_password) {
-                errors.push('Passwords do not match');
+            // First name validation
+            if (!formData.first_name.trim()) {
+                errors.push('First name is required');
+            } else if (formData.first_name.trim().length < 2) {
+                errors.push('First name must be at least 2 characters long');
             }
             
-            if (formData.password && formData.password.length < 8) {
+            // Last name validation
+            if (!formData.last_name.trim()) {
+                errors.push('Last name is required');
+            } else if (formData.last_name.trim().length < 2) {
+                errors.push('Last name must be at least 2 characters long');
+            }
+            
+            // Department validation
+            if (!formData.department.trim()) {
+                errors.push('Department is required');
+            } else if (formData.department.trim().length < 2) {
+                errors.push('Department must be at least 2 characters long');
+            }
+            
+            // Username validation
+            if (!formData.username.trim()) {
+                errors.push('Username is required');
+            } else if (formData.username.length < 3) {
+                errors.push('Username must be at least 3 characters long');
+            } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
+                errors.push('Username can only contain letters, numbers, hyphens, and underscores');
+            }
+            
+            // Email validation
+            if (!formData.email.trim()) {
+                errors.push('Email address is required');
+            } else {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(formData.email)) {
+                    errors.push('Please enter a valid email address');
+                }
+            }
+            
+            // Password validation
+            if (!formData.password) {
+                errors.push('Password is required');
+            } else if (formData.password.length < 8) {
                 errors.push('Password must be at least 8 characters long');
+            } else if (!/[A-Z]/.test(formData.password)) {
+                errors.push('Password must contain at least one uppercase letter');
+            } else if (!/[a-z]/.test(formData.password)) {
+                errors.push('Password must contain at least one lowercase letter');
+            } else if (!/[0-9]/.test(formData.password)) {
+                errors.push('Password must contain at least one number');
             }
             
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (formData.email && !emailRegex.test(formData.email)) {
-                errors.push('Please enter a valid email address');
+            // Password confirmation
+            if (!formData.confirm_password) {
+                errors.push('Password confirmation is required');
+            } else if (formData.password !== formData.confirm_password) {
+                errors.push('Passwords do not match');
             }
             
             return errors;
