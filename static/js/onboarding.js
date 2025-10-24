@@ -3,10 +3,9 @@ class OnboardingSystem {
         this.currentStep = 0;
         this.overlay = null;
         this.isActive = false;
-        this.eventHandlers = new Map(); // Better event handler tracking
-        this.completedSteps = new Set(); // Track which steps have been completed
+        this.eventHandlers = new Map();
+        this.completedSteps = new Set();
         
-        // Simplified steps array - focused on actual workflow
         this.steps = [
             {
                 title: "Welcome to Smart Attendance! 🎉",
@@ -125,8 +124,6 @@ class OnboardingSystem {
     init() {
         console.log('OnboardingSystem init called');
         
-        // Check if user has completed onboarding
-        // But allow server-side override for new users
         const isCompleted = localStorage.getItem('onboarding_completed') === 'true';
         const isServerSideStart = window.location.pathname.includes('/dashboard/');
         
@@ -142,29 +139,24 @@ class OnboardingSystem {
             localStorage.removeItem('onboarding_completed_steps');
         }
         
-        // Load completed steps from localStorage
         const savedCompletedSteps = localStorage.getItem('onboarding_completed_steps');
         if (savedCompletedSteps) {
             this.completedSteps = new Set(JSON.parse(savedCompletedSteps));
             console.log('Loaded completed steps:', Array.from(this.completedSteps));
         }
         
-        // Check if onboarding is in progress
         const savedStep = localStorage.getItem('onboarding_step');
         if (savedStep !== null) {
             this.currentStep = parseInt(savedStep);
             console.log('Resuming onboarding from step:', this.currentStep);
             
-            // Mark all previous steps as completed
             for (let i = 0; i < this.currentStep; i++) {
                 this.completedSteps.add(i);
             }
             
-            // Check current step to see if it's a navigation step that we just completed
             const currentStep = this.steps[this.currentStep];
             const currentPath = window.location.pathname;
             
-            // Only auto-advance if this is a "navigation instruction" step and we're now on the target page
             if (currentStep && currentStep.navigatesTo) {
                 const targetMatches = this.checkNavigationTarget(currentPath, currentStep.navigatesTo);
                 if (targetMatches) {
@@ -176,15 +168,11 @@ class OnboardingSystem {
             }
         }
         
-        // Set up global event listeners BEFORE showing any steps
         this.setupGlobalEventListeners();
-        
-        // Start onboarding if not completed
         this.startOnboarding();
     }
 
     checkNavigationTarget(currentPath, navigatesTo) {
-        // Check if current path matches the navigation target
         if (navigatesTo === 'class_management' && currentPath.includes('/class_management/')) {
             return true;
         }
@@ -206,28 +194,16 @@ class OnboardingSystem {
     setupGlobalEventListeners() {
         console.log('=== SETTING UP GLOBAL EVENT LISTENERS ===');
         
-        // Set up listener for studentAdded event with debouncing
         let studentAddedProcessing = false;
         const studentAddedHandler = (event) => {
             console.log('=== STUDENT ADDED EVENT CAUGHT ===');
-            console.log('Event detail:', event.detail);
-            console.log('Current step:', this.currentStep);
-            console.log('Is active:', this.isActive);
-            console.log('Currently processing:', studentAddedProcessing);
             
-            // Prevent multiple rapid calls
             if (studentAddedProcessing) {
-                console.log('⏭️ Skipping - already processing this event');
+                console.log('⚠️ Skipping - already processing this event');
                 return;
             }
             
-            // Check if we're on the correct step (step 4 - Add Your First Student)
             const currentStep = this.steps[this.currentStep];
-            console.log('Current step info:', {
-                index: this.currentStep,
-                title: currentStep?.title,
-                waitForEvent: currentStep?.waitForEvent
-            });
             
             if (currentStep && currentStep.waitForEvent === 'studentAdded' && this.isActive) {
                 console.log('✅ Correct step! Advancing onboarding...');
@@ -235,33 +211,22 @@ class OnboardingSystem {
                 this.showOverlay();
                 setTimeout(() => {
                     this.nextStep();
-                    // Reset flag after 2 seconds
                     setTimeout(() => {
                         studentAddedProcessing = false;
                     }, 2000);
                 }, 500);
-            } else {
-                console.log('❌ Not the right step or not active');
-                console.log('Current step title:', currentStep?.title);
-                console.log('Waiting for event:', currentStep?.waitForEvent);
-                console.log('Is active:', this.isActive);
             }
         };
         
-        // Only add listener to document (not both document and window)
         document.addEventListener('studentAdded', studentAddedHandler);
         this.eventHandlers.set('studentAdded', studentAddedHandler);
         
-        console.log('✅ Global event listeners set up');
-        
-        // Set up listener for classCreated event with debouncing
         let classCreatedProcessing = false;
         const classCreatedHandler = (event) => {
             console.log('=== CLASS CREATED EVENT CAUGHT ===');
-            console.log('Event detail:', event.detail);
             
             if (classCreatedProcessing) {
-                console.log('⏭️ Skipping - already processing this event');
+                console.log('⚠️ Skipping - already processing this event');
                 return;
             }
             
@@ -282,14 +247,12 @@ class OnboardingSystem {
         document.addEventListener('classCreated', classCreatedHandler);
         this.eventHandlers.set('classCreated', classCreatedHandler);
         
-        // Set up listener for sessionCreated event with debouncing
         let sessionCreatedProcessing = false;
         const sessionCreatedHandler = (event) => {
             console.log('=== SESSION CREATED EVENT CAUGHT ===');
-            console.log('Event detail:', event.detail);
             
             if (sessionCreatedProcessing) {
-                console.log('⏭️ Skipping - already processing this event');
+                console.log('⚠️ Skipping - already processing this event');
                 return;
             }
             
@@ -310,59 +273,39 @@ class OnboardingSystem {
         document.addEventListener('sessionCreated', sessionCreatedHandler);
         this.eventHandlers.set('sessionCreated', sessionCreatedHandler);
         
-         // Set up listener for sessionSelected event with debouncing
-         let sessionSelectedProcessing = false;
-         const sessionSelectedHandler = (event) => {
-             console.log('=== SESSION SELECTED EVENT CAUGHT ===');
-             console.log('Event detail:', event.detail);
-             console.log('Event type:', event.type);
-             console.log('Event bubbles:', event.bubbles);
-             console.log('Current step:', this.currentStep);
-             console.log('Current step title:', this.steps[this.currentStep]?.title);
-             console.log('Current step waitForEvent:', this.steps[this.currentStep]?.waitForEvent);
-             console.log('Is active:', this.isActive);
-             console.log('Currently processing:', sessionSelectedProcessing);
-             
-             if (sessionSelectedProcessing) {
-                 console.log('⏭️ Skipping - already processing this event');
-                 return;
-             }
-             
-             const currentStep = this.steps[this.currentStep];
-             console.log('🔍 Checking step conditions:');
-             console.log('- Current step exists:', !!currentStep);
-             console.log('- Wait for event matches:', currentStep?.waitForEvent === 'sessionSelected');
-             console.log('- Is active:', this.isActive);
-             
-             if (currentStep && currentStep.waitForEvent === 'sessionSelected' && this.isActive) {
-                 console.log('✅ Correct step! Advancing onboarding...');
-                 sessionSelectedProcessing = true;
-                 this.showOverlay();
-                 setTimeout(() => {
-                     this.nextStep();
-                     setTimeout(() => {
-                         sessionSelectedProcessing = false;
-                     }, 2000);
-                 }, 500);
-             } else {
-                 console.log('❌ Not the right step or not active');
-                 console.log('Current step title:', currentStep?.title);
-                 console.log('Waiting for event:', currentStep?.waitForEvent);
-                 console.log('Is active:', this.isActive);
-             }
-         };
+        let sessionSelectedProcessing = false;
+        const sessionSelectedHandler = (event) => {
+            console.log('=== SESSION SELECTED EVENT CAUGHT ===');
+            
+            if (sessionSelectedProcessing) {
+                console.log('⚠️ Skipping - already processing this event');
+                return;
+            }
+            
+            const currentStep = this.steps[this.currentStep];
+            
+            if (currentStep && currentStep.waitForEvent === 'sessionSelected' && this.isActive) {
+                console.log('✅ Correct step! Advancing onboarding...');
+                sessionSelectedProcessing = true;
+                this.showOverlay();
+                setTimeout(() => {
+                    this.nextStep();
+                    setTimeout(() => {
+                        sessionSelectedProcessing = false;
+                    }, 2000);
+                }, 500);
+            }
+        };
         
         document.addEventListener('sessionSelected', sessionSelectedHandler);
         this.eventHandlers.set('sessionSelected', sessionSelectedHandler);
         
-        // Set up listener for cameraStarted event with debouncing
         let cameraStartedProcessing = false;
         const cameraStartedHandler = (event) => {
             console.log('=== CAMERA STARTED EVENT CAUGHT ===');
-            console.log('Event detail:', event.detail);
             
             if (cameraStartedProcessing) {
-                console.log('⏭️ Skipping - already processing this event');
+                console.log('⚠️ Skipping - already processing this event');
                 return;
             }
             
@@ -383,53 +326,44 @@ class OnboardingSystem {
         document.addEventListener('cameraStarted', cameraStartedHandler);
         this.eventHandlers.set('cameraStarted', cameraStartedHandler);
         
-        // Set up listener for attendanceTaken event with debouncing
         let attendanceTakenProcessing = false;
         const attendanceTakenHandler = (event) => {
             console.log('=== ATTENDANCE TAKEN EVENT CAUGHT ===');
-            console.log('Event detail:', event.detail);
             
             if (attendanceTakenProcessing) {
-                console.log('⏭️ Skipping - already processing this event');
+                console.log('⚠️ Skipping - already processing this event');
                 return;
             }
             
             const currentStep = this.steps[this.currentStep];
-             if (currentStep && currentStep.waitForEvent === 'attendanceTaken' && this.isActive) {
-                 console.log('✅ Correct step! Showing success message...');
-                 console.log('Event detail:', event.detail);
-                 attendanceTakenProcessing = true;
-                 
-                 // Extract student name from the event detail
-                 let studentName = 'Student';
-                 if (event.detail && event.detail.message) {
-                     const message = event.detail.message;
-                     if (message.includes('Attendance taken:')) {
-                         const studentsText = message.replace('Attendance taken: ', '');
-                         // Extract just the name (before any status info like "(On time - 10:30:15)")
-                         studentName = studentsText.split(' (')[0];
-                         if (studentName === 'No match') {
-                             studentName = 'Unknown Student';
-                         }
-                     }
-                 }
-                 
-                 // Store the student name for the success message
-                 this.lastRecognizedStudent = studentName;
-                 
-                 // Mark this step as completed and move to the success message step
-                 this.markStepCompleted(this.currentStep);
-                 this.currentStep++;
-                 
-                 // Show overlay with success message
-                 this.showOverlay();
-                 setTimeout(() => {
-                     this.showStep(this.currentStep);
-                     setTimeout(() => {
-                         attendanceTakenProcessing = false;
-                     }, 2000);
-                 }, 500);
-             }
+            if (currentStep && currentStep.waitForEvent === 'attendanceTaken' && this.isActive) {
+                console.log('✅ Correct step! Showing success message...');
+                attendanceTakenProcessing = true;
+                
+                let studentName = 'Student';
+                if (event.detail && event.detail.message) {
+                    const message = event.detail.message;
+                    if (message.includes('Attendance taken:')) {
+                        const studentsText = message.replace('Attendance taken: ', '');
+                        studentName = studentsText.split(' (')[0];
+                        if (studentName === 'No match') {
+                            studentName = 'Unknown Student';
+                        }
+                    }
+                }
+                
+                this.lastRecognizedStudent = studentName;
+                this.markStepCompleted(this.currentStep);
+                this.currentStep++;
+                
+                this.showOverlay();
+                setTimeout(() => {
+                    this.showStep(this.currentStep);
+                    setTimeout(() => {
+                        attendanceTakenProcessing = false;
+                    }, 2000);
+                }, 500);
+            }
         };
         
         document.addEventListener('attendanceTaken', attendanceTakenHandler);
@@ -439,22 +373,18 @@ class OnboardingSystem {
     shouldAutoAdvance(step) {
         const currentPath = window.location.pathname;
         
-        // Step: "Go to Class Management" - advance if we're on class_management page
         if (step.title.includes("Go to Class Management") && currentPath.includes('/class_management/')) {
             return true;
         }
         
-        // Step: "Excellent Work! Now let's add a student" - advance if we're on add_student page
         if (step.title.includes("Excellent Work") && currentPath.includes('/add_student/')) {
             return true;
         }
         
-        // Step: "Create an Attendance Session" - advance if we're back on class_management
         if (step.title.includes("Create an Attendance Session") && currentPath.includes('/class_management/')) {
             return true;
         }
         
-        // Step: "Take Attendance" - advance if we're on home page
         if (step.title.includes("Take Attendance") && (currentPath === '/' || currentPath.includes('/home/'))) {
             return true;
         }
@@ -472,13 +402,13 @@ class OnboardingSystem {
     createOverlay() {
         console.log('Creating overlay element...');
         
-        // Remove any existing overlay first
         const existingOverlay = document.getElementById('onboarding-overlay');
         if (existingOverlay) {
             existingOverlay.remove();
         }
         
-        // Create overlay
+        document.body.classList.add('onboarding-active');
+        
         this.overlay = document.createElement('div');
         this.overlay.id = 'onboarding-overlay';
         
@@ -511,7 +441,6 @@ class OnboardingSystem {
     }
 
     addStyles() {
-        // Remove existing style if present
         const existingStyle = document.getElementById('onboarding-styles');
         if (existingStyle) {
             existingStyle.remove();
@@ -528,11 +457,21 @@ class OnboardingSystem {
                 height: 100%;
                 background: rgba(0, 0, 0, 0.85);
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 justify-content: center;
                 z-index: 10000;
                 animation: fadeIn 0.3s ease;
-                pointer-events: none;
+                pointer-events: auto;
+                overflow-y: auto;
+                padding: 2rem 1rem;
+            }
+
+            body.onboarding-active {
+                overflow: hidden;
+            }
+            
+            body.onboarding-active > *:not(#onboarding-overlay):not(#onboarding-styles) {
+                pointer-events: none !important;
             }
 
             @keyframes fadeIn {
@@ -550,6 +489,9 @@ class OnboardingSystem {
                 pointer-events: auto;
                 position: relative;
                 animation: slideUp 0.3s ease;
+                margin: 2rem auto;
+                max-height: calc(100vh - 4rem);
+                overflow-y: auto;
             }
 
             @keyframes slideUp {
@@ -723,39 +665,23 @@ class OnboardingSystem {
         console.log('=== SHOWING STEP ===');
         console.log('Step Index:', stepIndex);
         console.log('Step Title:', step.title);
-        console.log('Wait for event:', step.waitForEvent);
-        console.log('Hide overlay on next:', step.hideOverlayOnNext);
-        console.log('==================');
         
-        // Save current step to localStorage
         localStorage.setItem('onboarding_step', stepIndex.toString());
         
-        // Check if we should hide overlay immediately for this step
         if (step.hideOverlayOnShow) {
             console.log('Hiding overlay for user interaction');
             this.hideOverlay();
-            // Event listener is already set up globally
             return;
         }
         
-        // Check if this is a success message step
         if (step.action === 'success_message') {
             console.log('Showing success message step');
-            console.log('Last recognized student:', this.lastRecognizedStudent);
-            // Replace placeholder with actual student name
             if (step.content && step.content.includes('{studentName}')) {
                 const studentName = this.lastRecognizedStudent || 'Student';
                 step.content = step.content.replace('{studentName}', studentName);
             }
         }
         
-        // Check if this is a description step
-        if (step.action === 'description') {
-            console.log('Showing description step');
-            // Description steps just show information and wait for next button
-        }
-        
-        // Update modal content
         setTimeout(() => {
             const titleEl = document.getElementById('onboarding-title');
             const textEl = document.getElementById('onboarding-text');
@@ -763,7 +689,6 @@ class OnboardingSystem {
             if (titleEl) titleEl.textContent = step.title;
             if (textEl) textEl.textContent = step.content;
             
-            // Update progress
             const progress = ((stepIndex + 1) / this.totalSteps) * 100;
             const progressFill = document.getElementById('progress-fill');
             const progressText = document.getElementById('progress-text');
@@ -771,23 +696,26 @@ class OnboardingSystem {
             if (progressFill) progressFill.style.width = progress + '%';
             if (progressText) progressText.textContent = `Step ${stepIndex + 1} of ${this.totalSteps}`;
             
-            // Update buttons
             const prevBtn = document.getElementById('onboarding-prev');
             const nextBtn = document.getElementById('onboarding-next');
             
             if (prevBtn) prevBtn.style.display = stepIndex === 0 ? 'none' : 'inline-block';
             if (nextBtn) {
-                if (stepIndex === this.totalSteps - 1) {
+                // Hide Next button if there's a highlighted element that needs to be clicked
+                if (step.target && (step.hideOverlayOnClick || step.navigatesTo)) {
+                    nextBtn.style.display = 'none';
+                } else if (stepIndex === this.totalSteps - 1) {
                     nextBtn.textContent = 'Complete';
+                    nextBtn.style.display = 'inline-block';
                 } else if (step.action === 'success_message') {
                     nextBtn.textContent = 'Next';
                     nextBtn.style.display = 'inline-block';
                 } else {
                     nextBtn.textContent = 'Next';
+                    nextBtn.style.display = 'inline-block';
                 }
             }
             
-            // Handle highlighting
             this.clearHighlights();
             if (step.target) {
                 this.highlightElement(step.target);
@@ -796,12 +724,99 @@ class OnboardingSystem {
                     this.setupHideOnClick(step);
                 }
             }
+            
+            // Position modal on mobile to avoid overlapping highlighted elements
+            this.positionModalOnMobile(step);
         }, 50);
+    }
+
+    positionModalOnMobile(step) {
+        // Only adjust on mobile devices
+        if (window.innerWidth > 768) {
+            // Reset to center on desktop
+            if (this.overlay) {
+                this.overlay.style.alignItems = 'center';
+                this.overlay.style.paddingTop = '';
+                this.overlay.style.paddingBottom = '';
+                const modal = this.overlay.querySelector('.onboarding-modal');
+                if (modal) {
+                    modal.style.maxWidth = '500px';
+                    modal.style.padding = '2rem';
+                }
+            }
+            return;
+        }
+
+        // If there's a target element, check if modal overlaps with it
+        if (step.target && this.overlay) {
+            setTimeout(() => {
+                const targetElement = document.querySelector(step.target);
+                if (!targetElement) return;
+
+                const targetRect = targetElement.getBoundingClientRect();
+                const modal = this.overlay.querySelector('.onboarding-modal');
+                if (!modal) return;
+
+                // Make modal more compact for steps with form interactions
+                const isFormStep = step.title.includes("Create Your First Class") || 
+                                   step.title.includes("Create Session") ||
+                                   step.title.includes("Add Your First Student");
+                
+                if (isFormStep) {
+                    modal.style.maxWidth = '90%';
+                    modal.style.padding = '1rem';
+                } else {
+                    modal.style.maxWidth = '90%';
+                    modal.style.padding = '1.5rem';
+                }
+
+                const modalRect = modal.getBoundingClientRect();
+                const viewportHeight = window.innerHeight;
+
+                // Check if target is in top half or bottom half of screen
+                const targetMiddle = targetRect.top + (targetRect.height / 2);
+                const isTargetInTopHalf = targetMiddle < (viewportHeight / 2);
+
+                // Position modal opposite to where the target is
+                if (isTargetInTopHalf) {
+                    // Target is in top half, position modal at bottom
+                    this.overlay.style.alignItems = 'flex-end';
+                    this.overlay.style.paddingBottom = '0.5rem';
+                    this.overlay.style.paddingTop = '';
+                } else {
+                    // Target is in bottom half, position modal at top
+                    this.overlay.style.alignItems = 'flex-start';
+                    this.overlay.style.paddingTop = '0.5rem';
+                    this.overlay.style.paddingBottom = '';
+                }
+
+                // Scroll target element into view if needed
+                // Use a small delay to ensure modal is positioned first
+                setTimeout(() => {
+                    targetElement.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center',
+                        inline: 'center'
+                    });
+                }, 100);
+            }, 100);
+        } else {
+            // No target, center the modal
+            this.overlay.style.alignItems = 'center';
+            this.overlay.style.paddingTop = '';
+            this.overlay.style.paddingBottom = '';
+            const modal = this.overlay.querySelector('.onboarding-modal');
+            if (modal) {
+                modal.style.maxWidth = '90%';
+                modal.style.padding = '1.5rem';
+            }
+        }
     }
 
     hideOverlay() {
         if (this.overlay) {
             this.overlay.style.display = 'none';
+            document.body.classList.remove('onboarding-active');
             console.log('Overlay hidden');
         }
     }
@@ -809,6 +824,7 @@ class OnboardingSystem {
     showOverlay() {
         if (this.overlay) {
             this.overlay.style.display = 'flex';
+            document.body.classList.add('onboarding-active');
             console.log('Overlay shown');
         }
     }
@@ -833,37 +849,23 @@ class OnboardingSystem {
 
     nextStep() {
         console.log('=== NEXT STEP CALLED ===');
-        console.log('Current step before:', this.currentStep);
-        console.log('Total steps:', this.totalSteps);
-        console.log('Current step title:', this.steps[this.currentStep]?.title);
         
         const currentStep = this.steps[this.currentStep];
         
-        // Check if this step should hide overlay on Next button click
         if (currentStep && currentStep.hideOverlayOnNext) {
             console.log('Hiding overlay and waiting for event:', currentStep.waitForEvent);
             this.hideOverlay();
-            // Event listener is already set up globally, so just return
             return;
         }
         
-        // Mark current step as completed
         this.markStepCompleted(this.currentStep);
-        
-        console.log('🔍 Checking step bounds:');
-        console.log('- Current step:', this.currentStep);
-        console.log('- Total steps:', this.totalSteps);
-        console.log('- Should continue:', this.currentStep < this.totalSteps - 1);
         
         if (this.currentStep < this.totalSteps - 1) {
             const nextStepIndex = this.currentStep + 1;
             console.log('✅ Moving to step:', nextStepIndex);
-            console.log('Next step title:', this.steps[nextStepIndex]?.title);
             this.showStep(nextStepIndex);
         } else {
             console.log('❌ Completing onboarding (last step reached)');
-            console.log('Current step was:', this.currentStep);
-            console.log('Total steps:', this.totalSteps);
             this.completeOnboarding();
         }
     }
@@ -877,9 +879,8 @@ class OnboardingSystem {
     completeOnboarding() {
         localStorage.setItem('onboarding_completed', 'true');
         localStorage.removeItem('onboarding_step');
-        localStorage.removeItem('onboarding_completed_steps'); // Clear completed steps
+        localStorage.removeItem('onboarding_completed_steps');
         
-        // Mark onboarding as completed on the server
         fetch('/mark_onboarding_complete/', {
             method: 'POST',
             headers: {
@@ -919,8 +920,8 @@ class OnboardingSystem {
         console.log('=== DESTROYING ONBOARDING ===');
         
         this.clearHighlights();
+        document.body.classList.remove('onboarding-active');
         
-        // Clean up all event handlers
         this.eventHandlers.forEach((handler, eventName) => {
             document.removeEventListener(eventName, handler);
             console.log('Removed event handler:', eventName);
@@ -956,6 +957,13 @@ class OnboardingSystem {
     clearHighlights() {
         document.querySelectorAll('.onboarding-highlight').forEach(el => {
             el.classList.remove('onboarding-highlight');
+            el.style.pointerEvents = '';
+            
+            let parent = el.parentElement;
+            while (parent && parent !== document.body) {
+                parent.style.pointerEvents = '';
+                parent = parent.parentElement;
+            }
         });
     }
 
@@ -964,6 +972,13 @@ class OnboardingSystem {
             const element = document.querySelector(selector);
             if (element) {
                 element.classList.add('onboarding-highlight');
+                
+                let parent = element;
+                while (parent && parent !== document.body) {
+                    parent.style.pointerEvents = 'auto';
+                    parent = parent.parentElement;
+                }
+                
                 setTimeout(() => {
                     element.scrollIntoView({ 
                         behavior: 'smooth', 
@@ -999,7 +1014,7 @@ window.startOnboarding = function(clearStorage = true) {
     if (clearStorage) {
         localStorage.removeItem('onboarding_completed');
         localStorage.removeItem('onboarding_step');
-        localStorage.removeItem('onboarding_completed_steps'); // Clear completed steps tracker
+        localStorage.removeItem('onboarding_completed_steps');
     }
     
     if (window.onboardingSystem) {
@@ -1068,7 +1083,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Only auto-start onboarding if not on dashboard page (dashboard handles it via server-side flag)
     const currentPath = window.location.pathname;
     if (currentPath.includes('/dashboard/')) {
         console.log('On dashboard page - letting dashboard template handle onboarding');
