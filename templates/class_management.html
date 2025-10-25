@@ -672,8 +672,8 @@
                         </div>
                         
                         <div class="form-group">
-                            <label for="endTime">End Time</label>
-                            <input type="time" id="endTime" placeholder="Optional">
+                            <label for="endTime">End Time *</label>
+                            <input type="time" id="endTime" required>
                         </div>
                     </div>
                     
@@ -824,6 +824,31 @@
                     } else if (tabId === 'session') {
                         populateClassDropdown();
                         setDefaultSessionDate();
+                        // Auto-scroll to form on mobile when switching to Create Session tab
+                        if (window.innerWidth <= 768) {
+                            setTimeout(() => {
+                                const sessionForm = document.getElementById('createSessionForm');
+                                if (sessionForm && sessionForm.style.display !== 'none') {
+                                    // Scroll to show only the form with nothing above it
+                                    const formRect = sessionForm.getBoundingClientRect();
+                                    const scrollTop = window.pageYOffset + formRect.top - 20; // 20px offset from top
+                                    window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                                }
+                            }, 100);
+                        }
+                    } else if (tabId === 'create') {
+                        // Auto-scroll to form on mobile when switching to Create Class tab
+                        if (window.innerWidth <= 768) {
+                            setTimeout(() => {
+                                const createForm = document.getElementById('createClassForm');
+                                if (createForm) {
+                                    // Scroll to show only the form with nothing above it
+                                    const formRect = createForm.getBoundingClientRect();
+                                    const scrollTop = window.pageYOffset + formRect.top - 20; // 20px offset from top
+                                    window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                                }
+                            }, 100);
+                        }
                     } else if (tabId === 'students') {
                         populateFilterDropdown();
                         loadStudents();
@@ -1094,6 +1119,38 @@
             const createTab = document.querySelector('[data-tab="create"]');
             if (createTab) {
                 createTab.click();
+                // Auto-scroll to form on mobile
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        const createForm = document.getElementById('createClassForm');
+                        if (createForm) {
+                            // Scroll to show only the form with nothing above it
+                            const formRect = createForm.getBoundingClientRect();
+                            const scrollTop = window.pageYOffset + formRect.top - 20; // 20px offset from top
+                            window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                        }
+                    }, 200);
+                }
+            }
+        }
+
+        function switchToCreateSessionTab() {
+            // Find and click the create session tab
+            const sessionTab = document.querySelector('[data-tab="session"]');
+            if (sessionTab) {
+                sessionTab.click();
+                // Auto-scroll to form on mobile
+                if (window.innerWidth <= 768) {
+                    setTimeout(() => {
+                        const sessionForm = document.getElementById('createSessionForm');
+                        if (sessionForm && sessionForm.style.display !== 'none') {
+                            // Scroll to show only the form with nothing above it
+                            const formRect = sessionForm.getBoundingClientRect();
+                            const scrollTop = window.pageYOffset + formRect.top - 20; // 20px offset from top
+                            window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+                        }
+                    }, 200);
+                }
             }
         }
 
@@ -1162,14 +1219,32 @@
         end_time: document.getElementById('endTime').value.trim()
     };
     
-    if (!formData.name || !formData.class_id || !formData.date || !formData.start_time) {
-        showAlert('sessionAlert', 'Please fill in all required fields', 'error');
+    if (!formData.name || !formData.class_id || !formData.date || !formData.start_time || !formData.end_time) {
+        showAlert('sessionAlert', 'Please fill in all required fields including end time', 'error');
+        // Scroll to alert on mobile
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                const alert = document.getElementById('sessionAlert');
+                if (alert) {
+                    alert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
         return;
     }
     
-    // Validate that end time is after start time if provided
-    if (formData.end_time && formData.end_time <= formData.start_time) {
+    // Validate that end time is after start time
+    if (formData.end_time <= formData.start_time) {
         showAlert('sessionAlert', 'End time must be after start time', 'error');
+        // Scroll to alert on mobile
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                const alert = document.getElementById('sessionAlert');
+                if (alert) {
+                    alert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
         return;
     }
     

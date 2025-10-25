@@ -16,7 +16,7 @@ class OnboardingSystem {
             },
             {
                 title: "Step 1: Go to Class Management 📚",
-                content: "First, let's create a class for your students. Click 'Class Management' in the navigation above.",
+                content: "First, let's create a class for your students. Click 'Class Management Button' in the navigation ",
                 target: ".nav-links a[href='/class_management/']",
                 action: "highlight_nav",
                 page: "dashboard",
@@ -24,7 +24,7 @@ class OnboardingSystem {
             },
             {
                 title: "Create Your First Class 🏫",
-                content: "Great! Now click the 'Create Class' tab to start creating your first class.",
+                content: "Great! Now click the 'Create Class' tab to start creating your first class.Fill in the details and click 'Create Class'.",
                 target: ".nav-tab[data-tab='create']",
                 action: "highlight_button",
                 page: "class_management",
@@ -33,7 +33,7 @@ class OnboardingSystem {
             },
             {
                 title: "Excellent Work! 🎉",
-                content: "You've created your first class! Now let's add a student. Click 'Add Student' in the navigation.",
+                content: "You've created your first class! Now let's add a student. Click 'Add Student' in the navigation, Fill in the details and Take a photo of the student with good lighting and click 'Add Student'.",
                 target: ".nav-links a[href='/add_student/']",
                 action: "highlight_nav",
                 page: "class_management",
@@ -208,6 +208,12 @@ class OnboardingSystem {
             if (currentStep && currentStep.waitForEvent === 'studentAdded' && this.isActive) {
                 console.log('✅ Correct step! Advancing onboarding...');
                 studentAddedProcessing = true;
+                
+                // On mobile, scroll to top so navigation is visible
+                if (window.innerWidth <= 768) {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                
                 this.showOverlay();
                 setTimeout(() => {
                     this.nextStep();
@@ -753,52 +759,52 @@ class OnboardingSystem {
                 const targetElement = document.querySelector(step.target);
                 if (!targetElement) return;
 
-                const targetRect = targetElement.getBoundingClientRect();
-                const modal = this.overlay.querySelector('.onboarding-modal');
-                if (!modal) return;
+                // FIRST: Scroll the target element into view
+                // This ensures the navigation is visible before positioning the modal
+                targetElement.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start',
+                    inline: 'nearest'
+                });
 
-                // Make modal more compact for steps with form interactions
-                const isFormStep = step.title.includes("Create Your First Class") || 
-                                   step.title.includes("Create Session") ||
-                                   step.title.includes("Add Your First Student");
-                
-                if (isFormStep) {
-                    modal.style.maxWidth = '90%';
-                    modal.style.padding = '1rem';
-                } else {
-                    modal.style.maxWidth = '90%';
-                    modal.style.padding = '1.5rem';
-                }
-
-                const modalRect = modal.getBoundingClientRect();
-                const viewportHeight = window.innerHeight;
-
-                // Check if target is in top half or bottom half of screen
-                const targetMiddle = targetRect.top + (targetRect.height / 2);
-                const isTargetInTopHalf = targetMiddle < (viewportHeight / 2);
-
-                // Position modal opposite to where the target is
-                if (isTargetInTopHalf) {
-                    // Target is in top half, position modal at bottom
-                    this.overlay.style.alignItems = 'flex-end';
-                    this.overlay.style.paddingBottom = '0.5rem';
-                    this.overlay.style.paddingTop = '';
-                } else {
-                    // Target is in bottom half, position modal at top
-                    this.overlay.style.alignItems = 'flex-start';
-                    this.overlay.style.paddingTop = '0.5rem';
-                    this.overlay.style.paddingBottom = '';
-                }
-
-                // Scroll target element into view if needed
-                // Use a small delay to ensure modal is positioned first
+                // THEN: Wait for scroll to complete and position modal
                 setTimeout(() => {
-                    targetElement.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'center',
-                        inline: 'center'
-                    });
-                }, 100);
+                    const targetRect = targetElement.getBoundingClientRect();
+                    const modal = this.overlay.querySelector('.onboarding-modal');
+                    if (!modal) return;
+
+                    // Make modal more compact for steps with form interactions
+                    const isFormStep = step.title.includes("Create Your First Class") || 
+                                       step.title.includes("Create Session") ||
+                                       step.title.includes("Add Your First Student");
+                    
+                    if (isFormStep) {
+                        modal.style.maxWidth = '90%';
+                        modal.style.padding = '1rem';
+                    } else {
+                        modal.style.maxWidth = '90%';
+                        modal.style.padding = '1.5rem';
+                    }
+
+                    const viewportHeight = window.innerHeight;
+
+                    // Check if target is in top half or bottom half of screen
+                    const targetMiddle = targetRect.top + (targetRect.height / 2);
+                    const isTargetInTopHalf = targetMiddle < (viewportHeight / 2);
+
+                    // Position modal opposite to where the target is
+                    if (isTargetInTopHalf) {
+                        // Target is in top half, position modal at bottom
+                        this.overlay.style.alignItems = 'flex-end';
+                        this.overlay.style.paddingBottom = '0.5rem';
+                        this.overlay.style.paddingTop = '';
+                    } else {
+                        // Target is in bottom half, position modal at top
+                        this.overlay.style.alignItems = 'flex-start';
+                        this.overlay.style.paddingTop = '0.5rem';
+                        this.overlay.style.paddingBottom = '';
+                    }
+                }, 600); // Wait for scroll animation to complete
             }, 100);
         } else {
             // No target, center the modal
@@ -1098,3 +1104,4 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Onboarding already completed');
     }
 });
+

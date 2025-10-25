@@ -335,6 +335,8 @@
       if (!name) {
         statusEl.textContent = "Please enter student name";
         statusEl.className = "status error";
+        // Scroll to status message to show validation error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
 
@@ -368,9 +370,13 @@
         if (data.error) {
           statusEl.textContent = "Error: " + data.error;
           statusEl.className = "status error";
+          // Scroll to status message to show error
+          statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
           statusEl.textContent = data.message;
           statusEl.className = "status success";
+          // Scroll to status message to show success
+          statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
           
           // ✨ TRIGGER ONBOARDING EVENT WITH MULTIPLE ATTEMPTS ✨
           dispatchStudentAddedEvent(name, studentId);
@@ -390,6 +396,8 @@
       .catch(err => {
         statusEl.textContent = "Network error: " + err.message;
         statusEl.className = "status error";
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       })
       .finally(() => {
         captureBtn.disabled = false;
@@ -411,6 +419,12 @@
     startBtn.addEventListener("click", startCamera);
     stopBtn.addEventListener("click", stopCamera);
     captureBtn.addEventListener("click", captureStudent);
+    
+    // Auto-start camera when page loads
+    setTimeout(() => {
+        console.log('Auto-starting camera...');
+        startCamera();
+    }, 100); // Small delay to ensure page is fully loaded
     
     // Focus on name input
     document.getElementById("studentName").focus();

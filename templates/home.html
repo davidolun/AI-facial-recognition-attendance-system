@@ -68,6 +68,42 @@
       color: #e5e7eb;
     }
     
+    .attendance-instructions {
+      margin: 1rem 0;
+      padding: 1rem;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    
+    .attendance-instructions p {
+      margin: 0.5rem 0;
+      color: #d1d5db;
+    }
+    
+    .attendance-instructions p:first-child {
+      margin-top: 0;
+    }
+    
+    .attendance-instructions p:last-child {
+      margin-bottom: 0;
+    }
+    
+    .attendance-instructions ul {
+      margin: 0.5rem 0 1rem 0;
+      padding-left: 1.5rem;
+    }
+    
+    .attendance-instructions li {
+      margin: 0.3rem 0;
+      color: #d1d5db;
+    }
+    
+    .attendance-instructions ul:last-of-type {
+      margin-bottom: 0;
+    }
+    
     .session-info {
       margin-top: 1rem;
       padding: 1rem;
@@ -188,6 +224,29 @@
       color: #3b82f6;
     }
     
+    .status.processing {
+      background: rgba(245, 158, 11, 0.2);
+      border: 2px solid #f59e0b;
+      color: #fbbf24;
+      font-weight: bold;
+      animation: processingPulse 1.5s ease-in-out infinite;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+    
+    @keyframes processingPulse {
+      0%, 100% { 
+        background: rgba(245, 158, 11, 0.2);
+        border-color: #f59e0b;
+        transform: scale(1);
+      }
+      50% { 
+        background: rgba(245, 158, 11, 0.3);
+        border-color: #fbbf24;
+        transform: scale(1.02);
+      }
+    }
+    
     .loading {
       text-align: center;
       color: #9ca3af;
@@ -271,6 +330,21 @@
       <select id="sessionSelect" class="session-select">
         <option value="">Loading sessions...</option>
       </select>
+      
+        <div class="attendance-instructions">
+          <p><strong>📝 Instructions:</strong></p>
+          <ul>
+            <li><strong>Select a session first</strong></li>
+            <li><strong>Scroll down and click "Start Camera"</strong></li>
+            <li><strong>Position your face close to the camera then Wait for the green box to appear around your face</strong></li>
+            <li><strong>Click "Take Attendance" to complete</strong></li>
+          </ul>
+          <p><strong>💡 Tips:</strong></p>
+          <ul>
+            <li><strong>Use good lighting , One person at a time, Plain background for best results</strong></li>
+            
+          </ul>
+        </div>
       
       <div id="noSessionsMessage" class="no-sessions-message" style="display: none;">
         <p>No sessions available. You need to create a session first to take attendance.</p>
@@ -427,12 +501,16 @@ async function loadSessions() {
             sessionSelect.innerHTML = '<option value="">No sessions available</option>';
             statusEl.textContent = 'No sessions found. Please create sessions first.';
             statusEl.className = 'status error';
+            // Scroll to status message to show error
+            statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     } catch (error) {
         console.error('Error loading sessions:', error);
         sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
         statusEl.textContent = 'Error loading sessions';
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
@@ -444,6 +522,8 @@ function populateSessionSelect() {
         sessionInfo.classList.remove('active');
         statusEl.textContent = 'No sessions found. Please create a session first to take attendance.';
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
     
@@ -491,6 +571,8 @@ function updateSessionInfo() {
         startBtn.disabled = true;
         statusEl.textContent = 'No sessions found. Please create a session first to take attendance.';
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         selectedSession = null;
         return;
     }
@@ -501,6 +583,8 @@ function updateSessionInfo() {
         startBtn.disabled = true;
         statusEl.textContent = 'Please select a session first';
         statusEl.className = 'status info';
+        // Scroll to status message to show info
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         selectedSession = null;
         return;
     }
@@ -529,6 +613,12 @@ function updateSessionInfo() {
     startBtn.disabled = false;
     statusEl.textContent = 'Session selected. Click "Start Camera" to begin attendance';
     statusEl.className = 'status success';
+    
+    // Auto-start camera when session is selected
+    setTimeout(() => {
+        console.log('Auto-starting camera for selected session:', selectedSession.name);
+        startCamera();
+    }, 500); // Small delay to ensure UI is updated
 }
 
 // Start camera
@@ -536,6 +626,8 @@ async function startCamera() {
     if (!selectedSession) {
         statusEl.textContent = 'Please select a session first';
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
     
@@ -593,6 +685,8 @@ async function startCamera() {
         console.error(err);
         statusEl.textContent = 'Error: ' + (err.message || err.name);
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
 
@@ -640,8 +734,29 @@ async function updateFaceData() {
 
         const data = await response.json();
         faceData = data.faces || [];
+        
+        // Only update status for real-time face detection if we have faces
+        // Don't show "No face detected" messages during real-time detection
+        if (faceData.length > 0) {
+            // Face detected - show green box feedback
+            console.log("Face detected in real-time");
+            // Update status message with positioning instructions
+            if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
+                statusEl.textContent = "✅ Face detected! Wait for green box to appear, then take attendance. Ensure good lighting and clear background, one person at a time.";
+                statusEl.className = 'status success';
+            }
+        } else {
+            // No face detected - show guidance message (not error)
+            console.log("No face detected in real-time (silent)");
+            // Update status to guide user to position face
+            if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
+                statusEl.textContent = "👤 Position your face clearly in the camera frame. Ensure good lighting and clear background.";
+                statusEl.className = 'status info';
+            }
+        }
     } catch (err) {
         console.error("Face detection error:", err);
+        // Don't show error messages during real-time face detection
     }
 
     setTimeout(updateFaceData, 500);
@@ -671,12 +786,27 @@ function captureFrame() {
     if (!selectedSession) {
         statusEl.textContent = 'Please select a session first';
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
     
-    statusEl.textContent = 'Processing attendance...';
-    statusEl.className = 'status info';
+    // Check if any faces are detected before processing attendance
+    if (!faceData || faceData.length === 0) {
+        statusEl.textContent = '❌ No face detected - Please position your face clearly in the camera with good lighting and plain background';
+        statusEl.className = 'status error';
+        speakAttendance("No face detected");
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+    
+    statusEl.textContent = '🔄 PROCESSING ATTENDANCE... Please wait';
+    statusEl.className = 'status processing';
     captureBtn.disabled = true;
+    
+    // Scroll to processing message to make it obvious
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -698,35 +828,61 @@ function captureFrame() {
     .then(r => r.json())
     .then(data => {
         if (data.error) {
-            statusEl.textContent = "Error: " + data.error;
+            // Handle specific error cases with custom messages
+            if (data.error.includes("No face detected")) {
+                statusEl.textContent = "❌ No face detected - Please position your face clearly in the camera";
+                speakAttendance("No face detected");
+            } else {
+                statusEl.textContent = "Error: " + data.error;
+                speakAttendance("Error taking attendance");
+            }
             statusEl.className = 'status error';
-            speakAttendance("Error taking attendance");
+            // Scroll to status message to show error
+            statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
-            statusEl.textContent = data.message;
-            statusEl.className = 'status success';
+            // Check if the message contains "No face detected" or "No match" anywhere
+            if (data.message.includes("No face detected")) {
+                statusEl.textContent = "❌ No face detected - Please position your face clearly in the camera";
+                statusEl.className = 'status error';
+                speakAttendance("No face detected");
+            } else if (data.message.includes("No match")) {
+                statusEl.textContent = "❌ No match found - Student not recognized. Please ensure you are registered in the system.";
+                statusEl.className = 'status error';
+                speakAttendance("No match found");
+            } else {
+                statusEl.textContent = data.message;
+                statusEl.className = 'status success';
+            }
+            // Scroll to status message to show result
+            statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
-            // ✨ TRIGGER ONBOARDING EVENT FOR ATTENDANCE TAKEN ✨
-            console.log('=== DISPATCHING ATTENDANCE TAKEN EVENT ===');
-            console.log('Attendance taken successfully, dispatching event...');
-            const event = new CustomEvent('attendanceTaken', {
-                detail: { 
-                    message: data.message,
-                    attendanceCount: data.attendance_count || 0,
-                    totalStudents: data.total_students || 0
-                },
-                bubbles: true,
-                cancelable: true
-            });
-            document.dispatchEvent(event);
-            window.dispatchEvent(event); // Added window dispatch for robustness
-            console.log('attendanceTaken event dispatched successfully');
+            // Only trigger onboarding event for successful attendance (not for no face or no match)
+            if (!data.message.includes("No face detected") && !data.message.includes("No match")) {
+                // ✨ TRIGGER ONBOARDING EVENT FOR ATTENDANCE TAKEN ✨
+                console.log('=== DISPATCHING ATTENDANCE TAKEN EVENT ===');
+                console.log('Attendance taken successfully, dispatching event...');
+                const event = new CustomEvent('attendanceTaken', {
+                    detail: { 
+                        message: data.message,
+                        attendanceCount: data.attendance_count || 0,
+                        totalStudents: data.total_students || 0
+                    },
+                    bubbles: true,
+                    cancelable: true
+                });
+                document.dispatchEvent(event);
+                window.dispatchEvent(event); // Added window dispatch for robustness
+                console.log('attendanceTaken event dispatched successfully');
+            }
             
             // Extract student names from the message for TTS
             const message = data.message;
             if (message.includes("Attendance taken:")) {
                 const studentsText = message.replace("Attendance taken: ", "");
                 if (studentsText === "No match") {
-                    speakAttendance("No students recognized");
+                    statusEl.textContent = "❌ No match found - Student not recognized. Please ensure you are registered in the system.";
+                    statusEl.className = 'status error';
+                    speakAttendance("No match found");
                 } else {
                     // Parse individual student names and announce each
                     const students = studentsText.split(", ");
@@ -764,6 +920,8 @@ function captureFrame() {
     .catch(err => {
         statusEl.textContent = "Network error: " + err.message;
         statusEl.className = 'status error';
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     })
     .finally(() => {
         captureBtn.disabled = false;
@@ -799,6 +957,17 @@ window.addEventListener('resize', resizeOverlay);
 
 // Initialize
 loadSessions();
+
+// Auto-start camera when page loads (after a short delay)
+setTimeout(() => {
+    console.log('Auto-starting camera on Take Attendance page...');
+    // Only auto-start if a session is selected
+    if (selectedSession) {
+        startCamera();
+    } else {
+        console.log('No session selected yet, camera will start when session is selected');
+    }
+}, 1000); // 1 second delay to ensure page is fully loaded
 
 // Test function to manually trigger sessionSelected event
 window.testSessionSelected = function() {
