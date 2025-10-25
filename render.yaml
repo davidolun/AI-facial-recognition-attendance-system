@@ -8,7 +8,7 @@ services:
       pip install --only-binary=all -r requirements.txt
       python manage.py collectstatic --noinput
       python manage.py migrate
-    startCommand: gunicorn attendance_system.wsgi:application
+    startCommand: gunicorn attendance_system.wsgi:application --timeout 300 --workers 1 --worker-class sync --max-requests 1000 --max-requests-jitter 50 --preload
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.5
@@ -18,3 +18,14 @@ services:
         generateValue: true
       - key: OPENAI_API_KEY
         sync: false
+      # Memory optimization settings
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: 3
+      - key: TF_NUM_INTEROP_THREADS
+        value: 2
+      - key: TF_NUM_INTRAOP_THREADS
+        value: 2
+      - key: OMP_NUM_THREADS
+        value: 2
+      - key: MKL_NUM_THREADS
+        value: 2

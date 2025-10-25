@@ -26,9 +26,10 @@ try:
     import cv2
     from PIL import Image
     import io
-    from deepface import DeepFace
+    # DON'T import DeepFace at module level - import it lazily in functions
     IMAGE_PROCESSING_AVAILABLE = True
     FACE_RECOGNITION_AVAILABLE = True
+    print("✅ Image processing libraries loaded (DeepFace will be imported on demand)")
 except ImportError as e:
     IMAGE_PROCESSING_AVAILABLE = False
     FACE_RECOGNITION_AVAILABLE = False
@@ -84,6 +85,15 @@ client = None
 # DEEPFACE FACE RECOGNITION FUNCTIONS
 # ========================================
 
+# Lazy import helper for DeepFace
+def _get_deepface():
+    """Lazy import DeepFace to avoid loading it at module startup"""
+    try:
+        from deepface import DeepFace
+        return DeepFace
+    except ImportError:
+        return None
+
 def extract_face_embedding_deepface(image_array, enforce_detection=True):
     """
     Extract face embedding using DeepFace with improved robustness
@@ -96,91 +106,84 @@ def extract_face_embedding_deepface(image_array, enforce_detection=True):
         embedding: 128-dimensional face embedding (numpy array) or None
     """
     try:
-        # Try multiple backends for better face detection
-        backends = ["opencv", "retinaface", "mtcnn"]
+        # Lazy import DeepFace to reduce memory usage
+        DeepFace = _get_deepface()
+        if DeepFace is None:
+            print("❌ DeepFace not available")
+            return None
         
-        for backend in backends:
-            try:
-                print(f"Trying DeepFace with {backend} backend...")
-                embedding_objs = DeepFace.represent(
-                    img_path=image_array,
-                    model_name="Facenet",  # 22MB model - lightweight!
-                    detector_backend=backend,
-                    enforce_detection=enforce_detection,
-                    align=False  # Skip alignment for faster processing
-                )
-                
-                if embedding_objs and len(embedding_objs) > 0:
-                    embedding = np.array(embedding_objs[0]["embedding"], dtype=np.float32)
-                    print(f"✅ Successfully extracted embedding with {backend} backend")
-                    return embedding
-                    
-            except Exception as e:
-                print(f"❌ {backend} backend failed: {e}")
-                continue
+        # Use only opencv backend for memory efficiency
+        print(f"Trying DeepFace with opencv backend...")
+        embedding_objs = DeepFace.represent(
+            img_path=image_array,
+            model_name="Facenet",  # 22MB model - lightweight!
+            detector_backend="opencv",  # Only opencv to save memory
+            enforce_detection=enforce_detection,
+            align=False,  # Skip alignment for faster processing
+            silent=True  # Suppress verbose output
+        )
         
-        print("❌ All backends failed to extract face embedding")
+        if embedding_objs and len(embedding_objs) > 0:
+            embedding = np.array(embedding_objs[0]["embedding"], dtype=np.float32)
+            print(f"✅ Successfully extracted embedding")
+            return embedding
+        
+        print("❌ Failed to extract face embedding")
         return None
         
     except Exception as e:
         print(f"Face embedding extraction error: {e}")
-        import traceback
-        traceback.print_exc()
         return None
 
 
 def detect_faces_deepface(image_array):
     """
-    Detect faces using DeepFace with multiple backends for better detection
+    Detect faces using DeepFace with memory-efficient approach
     
     Returns:
         List of face regions in format: [x, y, w, h]
     """
     try:
-        # Try multiple backends for better face detection
-        backends = ["opencv", "retinaface", "mtcnn"]
+        # Lazy import DeepFace to reduce memory usage
+        DeepFace = _get_deepface()
+        if DeepFace is None:
+            print("❌ DeepFace not available")
+            return []
         
-        for backend in backends:
-            try:
-                print(f"Trying face detection with {backend} backend...")
-                face_objs = DeepFace.extract_faces(
-                    img_path=image_array,
-                    detector_backend=backend,
-                    enforce_detection=False,
-                    align=False  # Skip alignment for faster processing
-                )
-                
-                if face_objs and len(face_objs) > 0:
-                    faces = []
-                    for face_obj in face_objs:
-                        if "facial_area" in face_obj:
-                            region = face_obj["facial_area"]
-                            faces.append([
-                                region["x"],
-                                region["y"],
-                                region["w"],
-                                region["h"]
-                            ])
-                    
-                    if faces:
-                        print(f"✅ Successfully detected {len(faces)} faces with {backend} backend")
-                        return faces
-                        
-            except Exception as e:
-                print(f"❌ {backend} backend failed: {e}")
-                continue
+        # Use only opencv backend for memory efficiency
+        face_objs = DeepFace.extract_faces(
+            img_path=image_array,
+            detector_backend="opencv",  # Only opencv to save memory
+            enforce_detection=False,
+            align=False,  # Skip alignment for faster processing
+            silent=True  # Suppress verbose output
+        )
         
-        print("❌ All backends failed to detect faces")
+        if face_objs and len(face_objs) > 0:
+            faces = []
+            for face_obj in face_objs:
+                if "facial_area" in face_obj:
+                    region = face_obj["facial_area"]
+                    faces.append([
+                        region["x"],
+                        region["y"],
+                        region["w"],
+                        region["h"]
+                    ])
+            
+            if faces:
+                print(f"✅ Successfully detected {len(faces)} faces")
+                return faces
+        
+        print("❌ Failed to detect faces")
         return []
         
     except Exception as e:
         print(f"Face detection error: {e}")
-        import traceback
-        traceback.print_exc()
         return []
 
 
-def compare_embeddings(embedding1, embedding2, threshold=0.40):
+def compare_embeddings(embedding1, embedding2, threshold=0.30):
     """
     Compare two face embeddings using improved similarity algorithm
     

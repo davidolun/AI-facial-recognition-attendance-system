@@ -15,7 +15,10 @@ cloudinary==1.41.0
 django-cloudinary-storage==0.3.0
 requests==2.31.0
 
-# DeepFace Face Recognition
+# DeepFace Face Recognition (memory-optimized)
 deepface>=0.0.79
 pandas>=2.0.3
 tf-keras>=2.20.0
+
+# Memory optimization - use TensorFlow CPU-only version if available
+# tensorflow-cpu  # Uncomment if memory issues persist

@@ -1,1 +1,1 @@
-web: gunicorn attendance_system.wsgi:application
+web: gunicorn attendance_system.wsgi:application --timeout 300 --workers 1 --worker-class sync --max-requests 1000 --max-requests-jitter 50 --preload
