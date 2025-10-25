@@ -384,6 +384,12 @@
     <canvas id="canvas" style="display:none;"></canvas>
   </div>
 
+  <!-- MediaPipe Face Detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
   <script>
 const video = document.getElementById('webcam');
 const overlay = document.getElementById('overlay');
@@ -487,6 +493,150 @@ let stream;
 let faceData = [];
 let selectedSession = null;
 let sessions = [];
+
+// MediaPipe Face Detection
+let faceDetection;
+let lastVideoTime = -1;
+let mediaPipeErrorCount = 0;
+const MAX_MEDIAPIPE_ERRORS = 3;
+
+// Initialize MediaPipe Face Detection
+async function initializeFaceDetection() {
+    try {
+        console.log('Attempting to load MediaPipe Face Detection...');
+        
+        // Check if FaceDetection is available globally
+        if (typeof FaceDetection === 'undefined') {
+            console.error('FaceDetection not available. MediaPipe may not have loaded properly.');
+            return false;
+        }
+        
+        faceDetection = new FaceDetection({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+            }
+        });
+        
+        faceDetection.setOptions({
+            model: 'short', // Use short range model for better performance
+            minDetectionConfidence: 0.5, // Higher confidence threshold
+            minSuppressionThreshold: 0.3 // Better at filtering false positives
+        });
+        
+        faceDetection.onResults(onFaceDetectionResults);
+        console.log('MediaPipe Face Detection initialized successfully');
+        return true;
+    } catch (error) {
+        console.error('Failed to initialize MediaPipe:', error);
+        faceDetection = null;
+        return false;
+    }
+}
+
+// Cleanup MediaPipe resources
+function cleanupMediaPipe() {
+    if (faceDetection) {
+        try {
+            faceDetection.close();
+        } catch (error) {
+            console.warn('Error closing MediaPipe:', error);
+        }
+        faceDetection = null;
+    }
+}
+
+// Handle MediaPipe face detection results
+function onFaceDetectionResults(results) {
+    console.log('MediaPipe results:', results);
+    
+    try {
+        if (results.detections && results.detections.length > 0) {
+            // Convert MediaPipe detections to our format
+            faceData = results.detections.map(detection => {
+                console.log('Detection object:', detection);
+                
+                // Check different possible structures for bounding box
+                let bbox = null;
+                if (detection.locationData && detection.locationData.relativeBoundingBox) {
+                    bbox = detection.locationData.relativeBoundingBox;
+                } else if (detection.boundingBox) {
+                    bbox = detection.boundingBox;
+                } else if (detection.locationData && detection.locationData.boundingBox) {
+                    bbox = detection.locationData.boundingBox;
+                } else {
+                    console.warn('Unknown detection structure:', detection);
+                    return null;
+                }
+                
+                if (!bbox) {
+                    console.warn('No bounding box found in detection:', detection);
+                    return null;
+                }
+                
+                const videoWidth = video.videoWidth;
+                const videoHeight = video.videoHeight;
+                
+                // Handle different coordinate systems
+                let left, right, top, bottom;
+                
+                if (bbox.xCenter !== undefined) {
+                    // MediaPipe format with xCenter, yCenter, width, height
+                    left = (bbox.xCenter - bbox.width / 2) * videoWidth;
+                    right = (bbox.xCenter + bbox.width / 2) * videoWidth;
+                    top = (bbox.yCenter - bbox.height / 2) * videoHeight;
+                    bottom = (bbox.yCenter + bbox.height / 2) * videoHeight;
+                } else if (bbox.x !== undefined) {
+                    // Standard format with x, y, width, height
+                    left = bbox.x * videoWidth;
+                    right = (bbox.x + bbox.width) * videoWidth;
+                    top = bbox.y * videoHeight;
+                    bottom = (bbox.y + bbox.height) * videoHeight;
+                } else {
+                    console.warn('Unknown bounding box format:', bbox);
+                    return null;
+                }
+                
+                console.log('Face detected:', { left, right, top, bottom, confidence: detection.score });
+                
+                return {
+                    left: left,
+                    right: right,
+                    top: top,
+                    bottom: bottom,
+                    confidence: detection.score || 0.5
+                };
+            }).filter(face => face !== null);
+            
+            console.log('Face data updated:', faceData);
+            
+            // Update status message
+            if (faceData.length > 0) {
+                if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
+                    statusEl.textContent = "✅ Face detected! Wait for green box to appear, then take attendance. Ensure good lighting and clear background, one person at a time.";
+                    statusEl.className = 'status success';
+                }
+            } else {
+                if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
+                    statusEl.textContent = "👤 Position your face clearly in the camera frame. Ensure good lighting and clear background.";
+                    statusEl.className = 'status info';
+                }
+            }
+        } else {
+            faceData = [];
+            console.log('No faces detected');
+            // Update status message
+            if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
+                statusEl.textContent = "👤 Position your face clearly in the camera frame. Ensure good lighting and clear background.";
+                statusEl.className = 'status info';
+            }
+        }
+    } catch (error) {
+        console.error('Error processing MediaPipe results:', error);
+        faceData = [];
+        // Fallback to server-side detection
+        fallbackFaceDetection();
+    }
+}
 
 // Load sessions on page load
 async function loadSessions() {
@@ -679,6 +829,13 @@ async function startCamera() {
         captureBtn.disabled = false;
 
         resizeOverlay();
+        
+        // Initialize MediaPipe face detection
+        const mediaPipeLoaded = await initializeFaceDetection();
+        if (!mediaPipeLoaded) {
+            console.log('MediaPipe failed to load, using server-side detection');
+        }
+        
         updateFaceData();
         drawRectangles();
     } catch (err) {
@@ -703,6 +860,10 @@ function stopCamera() {
         stream.getTracks().forEach(t => t.stop());
         video.srcObject = null;
     }
+    
+    // Cleanup MediaPipe resources
+    cleanupMediaPipe();
+    
     statusEl.textContent = 'Camera stopped.';
     statusEl.className = 'status info';
     startBtn.disabled = false;
@@ -711,18 +872,64 @@ function stopCamera() {
 }
 
 async function updateFaceData() {
-    if (!video.videoWidth) {
+    if (!video.videoWidth || !video.videoHeight) {
         setTimeout(updateFaceData, 500);
         return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL('image/png');
+    // Validate video dimensions to prevent MediaPipe errors
+    if (video.videoWidth < 100 || video.videoHeight < 100) {
+        console.warn('Video dimensions too small for MediaPipe:', video.videoWidth, video.videoHeight);
+        setTimeout(updateFaceData, 500);
+        return;
+    }
 
+    // Try MediaPipe first, fallback to server-side detection
+    if (faceDetection) {
+        const currentTime = video.currentTime;
+        if (currentTime !== lastVideoTime) {
+            lastVideoTime = currentTime;
+            
+            try {
+                // Validate video state before sending to MediaPipe
+                if (video.readyState >= 2 && !video.paused && !video.ended) {
+                    await faceDetection.send({ image: video });
+                } else {
+                    console.warn('Video not ready for MediaPipe processing');
+                }
+            } catch (error) {
+                console.error("MediaPipe face detection error:", error);
+                mediaPipeErrorCount++;
+                
+                // If it's a memory error or too many errors, disable MediaPipe
+                if (error.message && (error.message.includes('memory access out of bounds') || 
+                    error.message.includes('RuntimeError')) || mediaPipeErrorCount >= MAX_MEDIAPIPE_ERRORS) {
+                    console.warn('MediaPipe error detected, switching to server-side detection permanently');
+                    cleanupMediaPipe();
+                    await fallbackFaceDetection();
+                } else {
+                    // For other errors, try fallback but keep MediaPipe
+                    await fallbackFaceDetection();
+                }
+            }
+        }
+        setTimeout(updateFaceData, 200); // Slower to prevent overload
+    } else {
+        // Fallback to server-side detection
+        await fallbackFaceDetection();
+        setTimeout(updateFaceData, 500);
+    }
+}
+
+// Fallback to server-side face detection
+async function fallbackFaceDetection() {
     try {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = canvas.toDataURL('image/png');
+
         const response = await fetch("/detect_faces/", {
             method: "POST",
             headers: {
@@ -733,33 +940,41 @@ async function updateFaceData() {
         });
 
         const data = await response.json();
-        faceData = data.faces || [];
+        const rawFaces = data.faces || [];
         
-        // Only update status for real-time face detection if we have faces
-        // Don't show "No face detected" messages during real-time detection
+        // Filter out invalid face detections
+        const validFaces = rawFaces.filter(face => {
+            const width = face.right - face.left;
+            const height = face.bottom - face.top;
+            const aspectRatio = width / height;
+            
+            const minSize = 30;
+            const maxSize = 500;
+            const minRatio = 0.6;
+            const maxRatio = 1.8;
+            
+            return width >= minSize && width <= maxSize && 
+                   height >= minSize && height <= maxSize &&
+                   aspectRatio >= minRatio && aspectRatio <= maxRatio;
+        });
+        
+        faceData = validFaces;
+        
+        // Update status message
         if (faceData.length > 0) {
-            // Face detected - show green box feedback
-            console.log("Face detected in real-time");
-            // Update status message with positioning instructions
             if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
                 statusEl.textContent = "✅ Face detected! Wait for green box to appear, then take attendance. Ensure good lighting and clear background, one person at a time.";
                 statusEl.className = 'status success';
             }
         } else {
-            // No face detected - show guidance message (not error)
-            console.log("No face detected in real-time (silent)");
-            // Update status to guide user to position face
             if (statusEl.textContent.includes("Camera is live") || statusEl.textContent.includes("Face detection active")) {
                 statusEl.textContent = "👤 Position your face clearly in the camera frame. Ensure good lighting and clear background.";
                 statusEl.className = 'status info';
             }
         }
     } catch (err) {
-        console.error("Face detection error:", err);
-        // Don't show error messages during real-time face detection
+        console.error("Fallback face detection error:", err);
     }
-
-    setTimeout(updateFaceData, 500);
 }
 
 function drawRectangles() {
@@ -801,6 +1016,32 @@ function captureFrame() {
         return;
     }
     
+    // Additional validation: Check if detected faces are reasonable size and ratio
+    const validFaces = faceData.filter(face => {
+        const width = face.right - face.left;
+        const height = face.bottom - face.top;
+        const aspectRatio = width / height;
+        
+        // Face should be reasonably sized (not too small or too large)
+        const minSize = 50; // Minimum 50px
+        const maxSize = 400; // Maximum 400px
+        const minRatio = 0.7; // Face should be roughly square to oval
+        const maxRatio = 1.5;
+        
+        return width >= minSize && width <= maxSize && 
+               height >= minSize && height <= maxSize &&
+               aspectRatio >= minRatio && aspectRatio <= maxRatio;
+    });
+    
+    if (validFaces.length === 0) {
+        statusEl.textContent = '❌ No valid face detected - Please position your face clearly in the camera with good lighting and plain background';
+        statusEl.className = 'status error';
+        speakAttendance("No valid face detected");
+        // Scroll to status message to show error
+        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+    
     statusEl.textContent = '🔄 PROCESSING ATTENDANCE... Please wait';
     statusEl.className = 'status processing';
     captureBtn.disabled = true;
@@ -814,7 +1055,7 @@ function captureFrame() {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = canvas.toDataURL('image/png');
 
-    fetch("/take_attendance_with_session/", {
+    fetch("/take_attendance_deepface/", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -1089,8 +1330,8 @@ captureFrame = function() {
     window.fetch = function(...args) {
         const promise = originalFetch.apply(this, args);
         
-                        // Only intercept the take_attendance_with_session endpoint
-        if (args[0] === '/take_attendance_with_session/') {
+                        // Only intercept the take_attendance_deepface endpoint
+        if (args[0] === '/take_attendance_deepface/') {
             promise.then(response => {
                 return response.clone().json().then(data => {
                     // Check if attendance was successfully taken

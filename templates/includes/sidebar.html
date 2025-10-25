@@ -212,6 +212,9 @@
     localStorage.removeItem('onboarding_current_step');
     localStorage.removeItem('onboarding_completed_steps');
     
+    // Set flag to start tour when redirected
+    localStorage.setItem('start_tour_on_load', 'true');
+    
     // Start onboarding
     if (typeof startOnboarding === 'function') {
       startOnboarding();

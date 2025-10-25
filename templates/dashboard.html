@@ -1296,21 +1296,25 @@
             const welcomeBanner = document.getElementById('welcome-banner');
             const hasCompletedOnboarding = localStorage.getItem('onboarding_completed') === 'true';
             const needsOnboarding = {{ needs_onboarding|yesno:"true,false" }};
+            const startTourOnLoad = localStorage.getItem('start_tour_on_load') === 'true';
             
             console.log('Dashboard loaded - needs_onboarding:', needsOnboarding);
             console.log('localStorage onboarding_completed:', hasCompletedOnboarding);
+            console.log('start_tour_on_load flag:', startTourOnLoad);
             
             // Show welcome banner for new users
             if (!hasCompletedOnboarding) {
                 welcomeBanner.style.display = 'block';
             }
             
-            // Auto-start onboarding for new users
-            if (needsOnboarding) {
-                console.log('🚀 Auto-starting onboarding for new user (server-side flag)');
+            // Auto-start onboarding for new users or when tour is requested
+            if (needsOnboarding || startTourOnLoad) {
+                console.log('🚀 Auto-starting onboarding for new user or tour request');
                 setTimeout(() => {
                     if (typeof window.startOnboarding === 'function') {
                         window.startOnboarding(false); // Don't clear localStorage for auto-start
+                        // Clear the flag after starting
+                        localStorage.removeItem('start_tour_on_load');
                     } else {
                         console.error('startOnboarding function not available');
                     }
