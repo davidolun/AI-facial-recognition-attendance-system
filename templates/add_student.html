@@ -165,12 +165,34 @@
       background: rgba(239, 68, 68, 0.1);
       border: 1px solid rgba(239, 68, 68, 0.3);
       color: #ef4444;
+      white-space: pre-line;
     }
     
     .status.info {
       background: rgba(59, 130, 246, 0.1);
       border: 1px solid rgba(59, 130, 246, 0.3);
       color: #3b82f6;
+    }
+    
+    .status.processing {
+      background: rgba(245, 158, 11, 0.2);
+      border: 2px solid #f59e0b;
+      color: #fbbf24;
+      font-weight: bold;
+      animation: processingPulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes processingPulse {
+      0%, 100% { 
+        background: rgba(245, 158, 11, 0.2);
+        border-color: #f59e0b;
+        transform: scale(1);
+      }
+      50% { 
+        background: rgba(245, 158, 11, 0.3);
+        border-color: #fbbf24;
+        transform: scale(1.02);
+      }
     }
     
     .preview-section {
@@ -210,7 +232,7 @@
       <a href="/ai_assistant/">🤖 AI Assistant</a>
     </div>
     
-    <h1>👤 Add New Student</h1>
+    <h1>👤 Add New Student (AWS Rekognition)</h1>
     
     <div class="form-section">
       <div class="form-group">
@@ -219,11 +241,12 @@
       </div>
       
       <div class="form-row">
-        <div class="form-group">
+        <!-- Student ID field hidden - auto-generated -->
+        <div class="form-group" style="display: none;">
           <label for="studentId">Student ID (Optional)</label>
           <input type="text" id="studentId" placeholder="e.g., STU001" />
         </div>
-        <div class="form-group">
+        <div class="form-group" style="grid-column: span 2;">
           <label for="phone">Phone (Optional)</label>
           <input type="tel" id="phone" placeholder="e.g., +1234567890" />
         </div>
@@ -237,7 +260,7 @@
     
     <div class="form-section preview-section">
       <h3 style="margin-top: 0; color: #d1d5db;">📸 Take Photo</h3>
-      <p style="color: #9ca3af; margin-bottom: 1rem;">Position yourself clearly in the camera frame</p>
+      <p style="color: #9ca3af; margin-bottom: 1rem;">Position yourself clearly in the camera frame with good lighting</p>
       
       <div class="cam">
         <video id="webcam" autoplay playsinline muted></video>
@@ -266,20 +289,18 @@
     const statusEl = document.getElementById("status");
     let stream;
 
-    // Function to dispatch studentAdded event (single dispatch only)
+    console.log('🚀 Add Student page initialized with AWS Rekognition');
+
     function dispatchStudentAddedEvent(name, studentId) {
       console.log('=== DISPATCHING STUDENT ADDED EVENT ===');
       console.log('Student Name:', name);
       console.log('Student ID:', studentId);
       
-      const eventDetail = { 
-        studentName: name, 
-        studentId: studentId 
-      };
-      
-      // Dispatch only once
       const event = new CustomEvent('studentAdded', {
-        detail: eventDetail,
+        detail: { 
+          studentName: name, 
+          studentId: studentId 
+        },
         bubbles: true,
         cancelable: true
       });
@@ -304,11 +325,13 @@
         stopBtn.disabled = false;
         captureBtn.disabled = false;
         
-        statusEl.textContent = "Camera is live. Position yourself in the frame and click 'Add Student'";
+        statusEl.textContent = "✅ Camera is live. Position yourself in the frame and click 'Add Student'";
         statusEl.className = "status success";
         
+        console.log('✅ Camera started successfully');
+        
       } catch(err) {
-        console.error(err);
+        console.error('❌ Camera error:', err);
         statusEl.textContent = "Error: " + (err.message || err.name);
         statusEl.className = "status error";
       }
@@ -324,6 +347,7 @@
       captureBtn.disabled = true;
       statusEl.textContent = "Camera stopped. Click 'Start Camera' to begin";
       statusEl.className = "status info";
+      console.log('🛑 Camera stopped');
     }
 
     function captureStudent() {
@@ -333,15 +357,18 @@
       const phone = document.getElementById("phone").value.trim();
       
       if (!name) {
-        statusEl.textContent = "Please enter student name";
+        statusEl.textContent = "❌ Please enter student name";
         statusEl.className = "status error";
-        // Scroll to status message to show validation error
-        statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById("studentName").focus();
         return;
       }
 
-      statusEl.textContent = "Processing... Please wait";
-      statusEl.className = "status info";
+      console.log('📸 Capturing student photo...');
+      console.log('Name:', name);
+      console.log('Student ID:', studentId || 'Auto-generated');
+
+      statusEl.textContent = "🔄 Processing with AWS Rekognition... Please wait";
+      statusEl.className = "status processing";
       captureBtn.disabled = true;
 
       canvas.width = video.videoWidth;
@@ -350,8 +377,10 @@
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       const imageData = canvas.toDataURL("image/png");
+      console.log('📷 Image captured, sending to server...');
 
-      fetch("/add_student_deepface/", {
+      // ✅ CORRECTED ENDPOINT - Changed from /add_student_deepface/ to /add_student/
+      fetch("/add_student/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -365,38 +394,43 @@
           image: imageData
         })
       })
-      .then(r => r.json())
+      .then(response => {
+        console.log('📡 Server response status:', response.status);
+        return response.json();
+      })
       .then(data => {
+        console.log('📦 Server response:', data);
+        
         if (data.error) {
-          statusEl.textContent = "Error: " + data.error;
+          console.error('❌ Error from server:', data.error);
+          statusEl.textContent = "❌ Error: " + data.error;
           statusEl.className = "status error";
-          // Scroll to status message to show error
           statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         } else {
-          statusEl.textContent = data.message;
+          console.log('✅ Student added successfully!');
+          statusEl.textContent = "✅ " + data.message;
           statusEl.className = "status success";
-          // Scroll to status message to show success
           statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
           
-          // ✨ TRIGGER ONBOARDING EVENT WITH MULTIPLE ATTEMPTS ✨
-          dispatchStudentAddedEvent(name, studentId);
+          // Trigger onboarding event
+          dispatchStudentAddedEvent(name, studentId || data.student_id);
           
-          // Clear form after successful addition
+          // Clear form
           document.getElementById("studentName").value = "";
           document.getElementById("studentId").value = "";
           document.getElementById("email").value = "";
           document.getElementById("phone").value = "";
           
-          // Stop camera after a delay
+          // Stop camera after delay
           setTimeout(() => {
             stopCamera();
           }, 2000);
         }
       })
       .catch(err => {
-        statusEl.textContent = "Network error: " + err.message;
+        console.error('❌ Network error:', err);
+        statusEl.textContent = "❌ Network error: " + err.message;
         statusEl.className = "status error";
-        // Scroll to status message to show error
         statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       })
       .finally(() => {
@@ -420,17 +454,16 @@
     stopBtn.addEventListener("click", stopCamera);
     captureBtn.addEventListener("click", captureStudent);
     
-    // Auto-start camera when page loads
+    // Auto-start camera
     setTimeout(() => {
-        console.log('Auto-starting camera...');
+        console.log('🎬 Auto-starting camera...');
         startCamera();
-    }, 100); // Small delay to ensure page is fully loaded
+    }, 100);
     
     // Focus on name input
     document.getElementById("studentName").focus();
     
-    // Log when page loads to help debug
-    console.log('Add Student page loaded');
+    console.log('✅ Add Student page loaded with AWS Rekognition');
     console.log('Onboarding system present:', !!window.onboardingSystem);
   </script>
 </body>

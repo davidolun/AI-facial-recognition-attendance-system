@@ -13,6 +13,16 @@ import cloudinary
 import cloudinary.uploader
 from cloudinary import config as cloudinary_config
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("✅ Loaded environment variables from .env")
+except ImportError:
+    print("⚠️ python-dotenv not available")
+except Exception as e:
+    print(f"⚠️ Error loading .env: {e}")
+
 # Configure Cloudinary
 cloudinary_config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', 'duu7pc7s3'),
@@ -26,14 +36,60 @@ try:
     import cv2
     from PIL import Image
     import io
-    # DON'T import DeepFace at module level - import it lazily in functions
+    import boto3
+    from botocore.exceptions import ClientError
     IMAGE_PROCESSING_AVAILABLE = True
     FACE_RECOGNITION_AVAILABLE = True
-    print("✅ Image processing libraries loaded (DeepFace will be imported on demand)")
+    print("✅ Image processing libraries loaded (AWS Rekognition)")
 except ImportError as e:
     IMAGE_PROCESSING_AVAILABLE = False
     FACE_RECOGNITION_AVAILABLE = False
     print(f"Warning: Image processing libraries not available: {e}")
+
+# Initialize AWS Rekognition client
+rekognition_client = None
+s3_client = None
+AWS_CONFIGURED = False
+
+try:
+    AWS_ACCESS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+    AWS_REGION = os.getenv('AWS_REGION', 'us-west-1')
+    AWS_COLLECTION_ID = os.getenv('AWS_FACE_COLLECTION_ID', 'attendance-faces')
+    
+    if AWS_ACCESS_KEY and AWS_SECRET_KEY:
+        rekognition_client = boto3.client(
+            'rekognition',
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            region_name=AWS_REGION
+        )
+        
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            region_name=AWS_REGION
+        )
+        
+        # Create collection if it doesn't exist
+        try:
+            rekognition_client.describe_collection(CollectionId=AWS_COLLECTION_ID)
+            print(f"✅ AWS Rekognition collection '{AWS_COLLECTION_ID}' exists")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                rekognition_client.create_collection(CollectionId=AWS_COLLECTION_ID)
+                print(f"✅ Created AWS Rekognition collection '{AWS_COLLECTION_ID}'")
+            else:
+                print(f"Error checking collection: {e}")
+        
+        AWS_CONFIGURED = True
+        print("✅ AWS Rekognition configured successfully")
+    else:
+        print("⚠️ AWS credentials not found in environment variables")
+except Exception as e:
+    print(f"⚠️ AWS Rekognition initialization failed: {e}")
+    AWS_CONFIGURED = False
 
 # OpenAI availability
 OPENAI_AVAILABLE = False
@@ -82,178 +138,135 @@ security_logger = logging.getLogger('faceapp.security')
 client = None
 
 # ========================================
-# DEEPFACE FACE RECOGNITION FUNCTIONS
+# AWS REKOGNITION FACE RECOGNITION FUNCTIONS
 # ========================================
 
-# Lazy import helper for DeepFace
-def _get_deepface():
-    """Lazy import DeepFace to avoid loading it at module startup"""
+def detect_faces_rekognition(image_bytes):
+    """Detect faces using AWS Rekognition"""
+    if not AWS_CONFIGURED or not rekognition_client:
+        print("❌ AWS Rekognition not configured")
+        return []
+    
     try:
-        from deepface import DeepFace
-        return DeepFace
-    except ImportError:
-        return None
+        response = rekognition_client.detect_faces(
+            Image={'Bytes': image_bytes},
+            Attributes=['DEFAULT']
+        )
+        
+        faces = []
+        for face_detail in response['FaceDetails']:
+            bbox = face_detail['BoundingBox']
+            faces.append({
+                'left': bbox['Left'],
+                'top': bbox['Top'],
+                'width': bbox['Width'],
+                'height': bbox['Height'],
+                'confidence': face_detail['Confidence']
+            })
+        
+        print(f"✅ Detected {len(faces)} faces with AWS Rekognition")
+        return faces
+        
+    except ClientError as e:
+        print(f"❌ AWS Rekognition face detection error: {e}")
+        return []
+    except Exception as e:
+        print(f"❌ Face detection error: {e}")
+        return []
 
-def extract_face_embedding_deepface(image_array, enforce_detection=True):
-    """
-    Extract face embedding using DeepFace with improved robustness
+
+def index_face_rekognition(image_bytes, student_id, student_name):
+    """Index a face in AWS Rekognition collection"""
+    if not AWS_CONFIGURED or not rekognition_client:
+        print("❌ AWS Rekognition not configured")
+        return None
     
-    Args:
-        image_array: numpy array of image (RGB)
-        enforce_detection: If True, raises error if no face detected
-    
-    Returns:
-        embedding: 128-dimensional face embedding (numpy array) or None
-    """
     try:
-        # Lazy import DeepFace to reduce memory usage
-        DeepFace = _get_deepface()
-        if DeepFace is None:
-            print("❌ DeepFace not available")
+        response = rekognition_client.index_faces(
+            CollectionId=AWS_COLLECTION_ID,
+            Image={'Bytes': image_bytes},
+            ExternalImageId=str(student_id),
+            DetectionAttributes=['DEFAULT'],
+            MaxFaces=1,
+            QualityFilter='AUTO'
+        )
+        print(f"📊 AWS Response: {response}") 
+        if response['FaceRecords']:
+            face_id = response['FaceRecords'][0]['Face']['FaceId']
+            print(f"✅ Indexed face for {student_name} (Face ID: {face_id})")
+            print(f"✅ ExternalImageId stored: {student_id}") 
+            return face_id
+        else:
+            print(f"❌ No face detected for {student_name}")
             return None
-        
-        # Use only opencv backend for memory efficiency
-        print(f"Trying DeepFace with opencv backend...")
-        embedding_objs = DeepFace.represent(
-            img_path=image_array,
-            model_name="Facenet",  # 22MB model - lightweight!
-            detector_backend="opencv",  # Only opencv to save memory
-            enforce_detection=enforce_detection,
-            align=False,  # Skip alignment for faster processing
-            silent=True  # Suppress verbose output
-        )
-        
-        if embedding_objs and len(embedding_objs) > 0:
-            embedding = np.array(embedding_objs[0]["embedding"], dtype=np.float32)
-            print(f"✅ Successfully extracted embedding")
-            return embedding
-        
-        print("❌ Failed to extract face embedding")
-        return None
-        
-    except Exception as e:
-        print(f"Face embedding extraction error: {e}")
-        return None
-
-
-def detect_faces_deepface(image_array):
-    """
-    Detect faces using DeepFace with memory-efficient approach
-    
-    Returns:
-        List of face regions in format: [x, y, w, h]
-    """
-    try:
-        # Lazy import DeepFace to reduce memory usage
-        DeepFace = _get_deepface()
-        if DeepFace is None:
-            print("❌ DeepFace not available")
-            return []
-        
-        # Use only opencv backend for memory efficiency
-        face_objs = DeepFace.extract_faces(
-            img_path=image_array,
-            detector_backend="opencv",  # Only opencv to save memory
-            enforce_detection=False,
-            align=False,  # Skip alignment for faster processing
-            silent=True  # Suppress verbose output
-        )
-        
-        if face_objs and len(face_objs) > 0:
-            faces = []
-            for face_obj in face_objs:
-                if "facial_area" in face_obj:
-                    region = face_obj["facial_area"]
-                    faces.append([
-                        region["x"],
-                        region["y"],
-                        region["w"],
-                        region["h"]
-                    ])
             
-            if faces:
-                print(f"✅ Successfully detected {len(faces)} faces")
-                return faces
-        
-        print("❌ Failed to detect faces")
-        return []
-        
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'InvalidParameterException':
+            print(f"❌ Invalid image format or no face detected: {e}")
+        else:
+            print(f"❌ AWS Rekognition indexing error: {e}")
+        return None
     except Exception as e:
-        print(f"Face detection error: {e}")
-        return []
+        print(f"❌ Face indexing error: {e}")
+        return None
 
 
-def compare_embeddings(embedding1, embedding2, threshold=0.30):
-    """
-    Compare two face embeddings using improved similarity algorithm
+def search_face_rekognition(image_bytes, threshold=80):
+    """Search for a face in AWS Rekognition collection"""
+    if not AWS_CONFIGURED or not rekognition_client:
+        print("❌ AWS Rekognition not configured")
+        return None, 0
     
-    Args:
-        embedding1, embedding2: Face embeddings (numpy arrays)
-        threshold: Similarity threshold (0-1). VERY LENIENT for better matching
-                  0.40 = very lenient (recommended for DeepFace)
-                  0.50 = lenient
-                  0.60 = moderate
-                  0.70 = strict
-    
-    Returns:
-        (is_match: bool, similarity: float)
-    """
     try:
-        if embedding1 is None or embedding2 is None:
-            return False, 0.0
-        
-        # Ensure both are numpy arrays
-        if not isinstance(embedding1, np.ndarray):
-            embedding1 = np.array(embedding1, dtype=np.float32)
-        if not isinstance(embedding2, np.ndarray):
-            embedding2 = np.array(embedding2, dtype=np.float32)
-        
-        # Check if embeddings have the same shape
-        if embedding1.shape != embedding2.shape:
-            print(f"Shape mismatch: {embedding1.shape} vs {embedding2.shape}")
-            return False, 0.0
-        
-        # Normalize embeddings to unit vectors
-        norm1 = np.linalg.norm(embedding1)
-        norm2 = np.linalg.norm(embedding2)
-        
-        if norm1 == 0 or norm2 == 0:
-            print("Zero norm embedding detected")
-            return False, 0.0
-        
-        # Normalize embeddings
-        embedding1_norm = embedding1 / norm1
-        embedding2_norm = embedding2 / norm2
-        
-        # Calculate cosine similarity (range [-1, 1])
-        cosine_similarity = np.dot(embedding1_norm, embedding2_norm)
-        
-        # For face recognition, we want high positive similarity
-        # Use the raw cosine similarity (higher is better, range [-1, 1])
-        similarity = float(cosine_similarity)
-        
-        # Alternative: Use Euclidean distance (lower is better)
-        euclidean_distance = np.linalg.norm(embedding1_norm - embedding2_norm)
-        euclidean_similarity = 1.0 / (1.0 + euclidean_distance)  # Convert to similarity
-        
-        # Use the better of the two similarity measures
-        final_similarity = max(similarity, euclidean_similarity)
-        
-        # For cosine similarity, we need to adjust threshold since it's in [-1, 1] range
-        # Convert threshold to cosine similarity range
-        cosine_threshold = (threshold * 2) - 1  # Convert [0,1] to [-1,1]
-        
-        is_match = final_similarity >= cosine_threshold
-        
-        print(f"Cosine: {similarity:.4f}, Euclidean: {euclidean_similarity:.4f}, Final: {final_similarity:.4f}, Cosine Threshold: {cosine_threshold:.4f}, Match: {is_match}")
-        
-        return is_match, final_similarity
-        
+        response = rekognition_client.search_faces_by_image(
+            CollectionId=AWS_COLLECTION_ID,
+            Image={'Bytes': image_bytes},
+            MaxFaces=1,
+            FaceMatchThreshold=threshold
+        )
+        print(f"📊 Search response: {response}")  # ✅ ADD THIS
+        print(f"🎯 Matches found: {len(response.get('FaceMatches', []))}")
+        if response['FaceMatches']:
+            match = response['FaceMatches'][0]
+            student_id = match['Face']['ExternalImageId']
+            similarity = match['Similarity']
+            
+            print(f"✅ Face match found: Student ID {student_id}, Similarity: {similarity:.2f}%")
+            return student_id, similarity
+        else:
+            print(f"❌ No face match found (threshold: {threshold}%)")
+            return None, 0
+            
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'InvalidParameterException':
+            print(f"❌ No face detected in image: {e}")
+        else:
+            print(f"❌ AWS Rekognition search error: {e}")
+        return None, 0
     except Exception as e:
-        print(f"Embedding comparison error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False, 0.0
+        print(f"❌ Face search error: {e}")
+        return None, 0
+
+
+def delete_face_rekognition(face_id):
+    """Delete a face from AWS Rekognition collection"""
+    if not AWS_CONFIGURED or not rekognition_client:
+        print("❌ AWS Rekognition not configured")
+        return False
+    
+    try:
+        rekognition_client.delete_faces(
+            CollectionId=AWS_COLLECTION_ID,
+            FaceIds=[face_id]
+        )
+        print(f"✅ Deleted face {face_id} from collection")
+        return True
+        
+    except ClientError as e:
+        print(f"❌ Error deleting face: {e}")
+        return False
 
 
 def load_image_from_path_or_url(image_path):
@@ -310,6 +323,10 @@ def add_student(request):
                 logger.warning(f"Student addition failed: No image provided by user {request.user.username}")
                 return JsonResponse({"error": "No image provided"}, status=400)
 
+            if not AWS_CONFIGURED:
+                logger.error("AWS Rekognition not configured")
+                return JsonResponse({"error": "Face recognition service not configured"}, status=500)
+
             # Decode base64 image
             try:
                 image_data = image_data.split(',')[1]
@@ -319,33 +336,6 @@ def add_student(request):
                 logger.error(f"Image decoding failed for user {request.user.username}: {str(e)}")
                 return JsonResponse({"error": "Invalid image format"}, status=400)
 
-            # Convert to RGB array for DeepFace
-            image_array = np.array(image.convert('RGB'))
-
-            # Extract face embedding using DeepFace
-            if not FACE_RECOGNITION_AVAILABLE:
-                logger.warning(f"Face recognition not available")
-                return JsonResponse({"error": "Face recognition service unavailable"}, status=500)
-            
-            try:
-                face_embedding = extract_face_embedding_deepface(image_array, enforce_detection=True)
-                
-                if face_embedding is None:
-                    logger.warning(f"No face detected in image for {student_name}")
-                    return JsonResponse({
-                        "error": "No face detected. Please ensure:\nâ€¢ Your face is clearly visible\nâ€¢ Good lighting (no shadows)\nâ€¢ Look directly at camera\nâ€¢ Remove sunglasses/masks"
-                    }, status=400)
-                
-                logger.info(f"Face embedding extracted for {student_name}")
-                    
-            except Exception as e:
-                logger.error(f"Face detection failed for {student_name}: {str(e)}")
-                return JsonResponse({"error": "Face detection failed. Please try again with better lighting."}, status=400)
-
-            # Generate unique filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{student_name.lower().replace(' ', '_')}_{timestamp}.jpg"
-            
             # Convert to RGB if needed
             if image.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
@@ -355,12 +345,40 @@ def add_student(request):
                 image = background
             elif image.mode != 'RGB':
                 image = image.convert('RGB')
+
+            # Convert image to bytes for AWS
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='JPEG', quality=95)
+            img_byte_arr.seek(0)
+            aws_image_bytes = img_byte_arr.read()
+
+            # Generate unique student ID if not provided
+            if not student_id:
+                student_id = f"STU{int(time.time())}"
+
+            # Index face in AWS Rekognition
+            try:
+                face_id = index_face_rekognition(aws_image_bytes, student_id, student_name)
+                
+                if face_id is None:
+                    logger.warning(f"No face detected in image for {student_name}")
+                    return JsonResponse({
+                        "error": "No face detected. Please ensure:\n• Your face is clearly visible\n• Good lighting (no shadows)\n• Look directly at camera\n• Remove sunglasses/masks"
+                    }, status=400)
+                
+                logger.info(f"Face indexed for {student_name} (Face ID: {face_id})")
+                    
+            except Exception as e:
+                logger.error(f"Face detection failed for {student_name}: {str(e)}")
+                return JsonResponse({"error": "Face detection failed. Please try again with better lighting."}, status=400)
+
+            # Generate unique filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{student_name.lower().replace(' ', '_')}_{timestamp}.jpg"
             
             # Try to upload to Cloudinary first, fallback to local storage
             try:
                 logger.info(f"Attempting to upload {filename} to Cloudinary...")
-                img_byte_arr = io.BytesIO()
-                image.save(img_byte_arr, format='JPEG', quality=95)
                 img_byte_arr.seek(0)
                 
                 upload_result = cloudinary.uploader.upload(
@@ -379,17 +397,27 @@ def add_student(request):
                 relative_path = os.path.join('students', filename)
                 logger.info(f"Saved locally: {relative_path}")
 
-            # Store embedding as JSON
-            embedding_json = json.dumps(face_embedding.tolist())
+            # Upload to AWS S3 bucket
+            
+
+            # S3 upload optional - Rekognition stores faces in its own collection
+            logger.info("Face indexed in Rekognition collection (S3 upload skipped)")
+            # Store AWS Face ID as face encoding
+            face_encoding_data = json.dumps({
+                'face_id': face_id,
+                'student_id': student_id,
+                'indexed_at': datetime.now().isoformat(),
+                'service': 'aws_rekognition'
+            })
 
             # Create student record
             student = Student.objects.create(
                 name=student_name,
-                student_id=student_id if student_id else None,
+                student_id=student_id,
                 email=email if email else None,
                 phone=phone if phone else None,
                 image_path=relative_path,
-                face_encoding=embedding_json
+                face_encoding=face_encoding_data
             )
 
             # Automatically add student to all classes of the logged-in teacher
@@ -430,6 +458,9 @@ def take_attendance_with_session(request):
             if not session_id:
                 return JsonResponse({"error": "No session selected"}, status=400)
 
+            if not AWS_CONFIGURED:
+                return JsonResponse({"error": "Face recognition service not configured"}, status=500)
+
             try:
                 session = AttendanceSession.objects.get(id=session_id, teacher=request.user)
             except AttendanceSession.DoesNotExist:
@@ -438,140 +469,70 @@ def take_attendance_with_session(request):
             # Decode image
             img_str = re.sub("^data:image/.+;base64,", "", image_data)
             img_bytes = base64.b64decode(img_str)
+
+            # Search for face in AWS Rekognition
+            print("Searching for face in AWS Rekognition collection...")
+            matched_student_id, similarity = search_face_rekognition(img_bytes, threshold=80)
+            
+            if not matched_student_id:
+                print("Trying with lower threshold (70%)...")
+                matched_student_id, similarity = search_face_rekognition(img_bytes, threshold=70)
+            
+            # Detect faces for visualization
             nparr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            # Extract embedding from captured image using DeepFace
-            print("Extracting face embedding from captured image...")
-            captured_embedding = extract_face_embedding_deepface(rgb_frame, enforce_detection=False)
             
-            # If no embedding found, try with different settings
-            if captured_embedding is None:
-                print("🔄 Trying alternative face extraction methods...")
-                # Try with enforce_detection=True for stricter detection
-                captured_embedding = extract_face_embedding_deepface(rgb_frame, enforce_detection=True)
-                
-            # If still no embedding, try with different image preprocessing
-            if captured_embedding is None:
-                print("🔄 Trying image preprocessing...")
-                # Try with different image sizes
-                height, width = rgb_frame.shape[:2]
-                if height > 500 or width > 500:
-                    # Resize large images
-                    scale = min(500/height, 500/width)
-                    new_height = int(height * scale)
-                    new_width = int(width * scale)
-                    resized_frame = cv2.resize(rgb_frame, (new_width, new_height))
-                    captured_embedding = extract_face_embedding_deepface(resized_frame, enforce_detection=False)
+            pil_image = Image.fromarray(rgb_frame)
+            img_byte_arr = io.BytesIO()
+            pil_image.save(img_byte_arr, format='JPEG')
+            img_byte_arr.seek(0)
+            detect_bytes = img_byte_arr.read()
             
-            if captured_embedding is None:
-                # Detect faces for visualization
-                faces = detect_faces_deepface(rgb_frame)
-                faces_for_js = [
-                    {"top": f[1], "right": f[0]+f[2], "bottom": f[1]+f[3], "left": f[0]}
-                    for f in faces
-                ]
-                return JsonResponse({
-                    "message": "No face detected. Please:\n• Position face clearly in frame\n• Ensure good lighting\n• Look directly at camera",
-                    "faces": faces_for_js
+            detected_faces = detect_faces_rekognition(detect_bytes)
+            
+            # Convert to frontend format
+            height, width = rgb_frame.shape[:2]
+            faces_for_js = []
+            for face in detected_faces:
+                faces_for_js.append({
+                    "top": int(face['top'] * height),
+                    "right": int((face['left'] + face['width']) * width),
+                    "bottom": int((face['top'] + face['height']) * height),
+                    "left": int(face['left'] * width)
                 })
-
-            print(f"Captured embedding shape: {captured_embedding.shape}")
-            print(f"Captured embedding norm: {np.linalg.norm(captured_embedding):.4f}")
-
-            # Get students in this class with embeddings
-            students = session.class_session.students.filter(is_active=True)
-            print(f"Checking {students.count()} students in class...")
             
-            best_match = None
-            best_similarity = 0.0
-            SIMILARITY_THRESHOLD = 0.40  # VERY LENIENT threshold for better matching
-            
-            match_results = []  # For debugging
-            
-            for student in students:
-                if not student.face_encoding:
-                    print(f"⚠️ {student.name}: No face encoding stored")
-                    continue
-                
-                try:
-                    # Load stored embedding
-                    stored_embedding = np.array(json.loads(student.face_encoding))
-                    print(f"\n🔍 Comparing with {student.name}:")
-                    print(f"  Stored embedding shape: {stored_embedding.shape}")
-                    print(f"  Stored embedding norm: {np.linalg.norm(stored_embedding):.4f}")
-                    
-                    # Compare embeddings with LOWERED threshold
-                    is_match, similarity = compare_embeddings(
-                        captured_embedding, 
-                        stored_embedding,
-                        threshold=SIMILARITY_THRESHOLD
-                    )
-                    
-                    # If no match with current threshold, try with even lower threshold
-                    if not is_match and similarity > 0.2:  # If similarity is decent but below threshold
-                        print(f"🔄 Trying lower threshold for {student.name}...")
-                        is_match_lower, similarity_lower = compare_embeddings(
-                            captured_embedding, 
-                            stored_embedding,
-                            threshold=0.25  # Very lenient threshold
-                        )
-                        if is_match_lower:
-                            is_match = True
-                            similarity = similarity_lower
-                            print(f"✅ Match found with lower threshold: {similarity:.4f}")
-                    
-                    # Final fallback - if similarity is above 0.15, consider it a match
-                    if not is_match and similarity > 0.15:
-                        print(f"🔄 Final fallback: {student.name} similarity {similarity:.4f} > 0.15, accepting match")
-                        is_match = True
-                    
-                    match_results.append({
-                        'name': student.name,
-                        'similarity': similarity,
-                        'is_match': is_match
-                    })
-                    
-                    print(f"  Result: similarity={similarity:.4f}, match={is_match}")
-                    
-                    if similarity > best_similarity:
-                        best_similarity = similarity
-                        best_match = student
-                        
-                except Exception as e:
-                    print(f"❌ Error comparing with {student.name}: {e}")
-                    continue
-            
-            # Sort and print all match results
-            match_results.sort(key=lambda x: x['similarity'], reverse=True)
-            print("\n📊 All Match Results (sorted):")
-            for result in match_results:
-                print(f"  {result['name']}: {result['similarity']:.4f} {'✅ MATCH' if result['is_match'] else '❌'}")
-            
-            # Detect faces for visualization
-            faces = detect_faces_deepface(rgb_frame)
-            faces_for_js = [
-                {"top": f[1], "right": f[0]+f[2], "bottom": f[1]+f[3], "left": f[0]}
-                for f in faces
-            ]
-            
-            if not best_match:
+            if not matched_student_id:
                 print(f"\n❌ NO MATCH FOUND")
-                print(f"Best similarity: {best_similarity:.4f}")
-                print(f"Threshold: {SIMILARITY_THRESHOLD}")
+                print(f"Best similarity: {similarity:.2f}%")
                 return JsonResponse({
-                    "message": f"No match found - Face not recognized\nBest similarity: {best_similarity:.2%}\nThreshold: {SIMILARITY_THRESHOLD:.2%}",
+                    "message": f"No match found - Face not recognized\nBest similarity: {similarity:.1f}%\nThreshold: 70%",
                     "faces": faces_for_js,
                     "debug": {
-                        "best_similarity": float(best_similarity),
-                        "threshold": SIMILARITY_THRESHOLD,
-                        "students_checked": len(match_results),
-                        "top_matches": match_results[:3]  # Top 3 matches for debugging
+                        "best_similarity": float(similarity),
+                        "threshold": 70,
+                        "service": "aws_rekognition"
                     }
                 })
+
+            # Find student by student_id
+            try:
+                best_match = Student.objects.get(student_id=matched_student_id, is_active=True)
+            except Student.DoesNotExist:
+                print(f"❌ Student with ID {matched_student_id} not found in database")
+                return JsonResponse({
+                    "message": "Student record not found in database",
+                    "faces": faces_for_js
+                })
             
-            print(f"\n✅ MATCH FOUND: {best_match.name} ({best_similarity:.4f})")
+            # Check if student is in this class
+            if not session.class_session.students.filter(id=best_match.id).exists():
+                return JsonResponse({
+                    "message": f"{best_match.name} is not enrolled in {session.class_session.name}",
+                    "faces": faces_for_js
+                })
+            
+            print(f"\n✅ MATCH FOUND: {best_match.name} ({similarity:.2f}%)")
             
             # Process attendance
             current_time = datetime.now()
@@ -594,7 +555,7 @@ def take_attendance_with_session(request):
                 
                 time_str = arrival_time.strftime("%H:%M:%S")
                 status = f" (Late - {time_str})" if is_late else f" (On time - {time_str})"
-                confidence_str = f" [Confidence: {best_similarity*100:.1f}%]"
+                confidence_str = f" [Confidence: {similarity:.1f}%]"
                 message = f"Attendance taken: {best_match.name}{status}{confidence_str}"
             else:
                 original_time = existing_record.arrival_time.strftime("%H:%M:%S")
@@ -610,7 +571,7 @@ def take_attendance_with_session(request):
                 "total_students": total_students,
                 "session_name": session.name,
                 "class_name": session.class_session.name,
-                "confidence": float(best_similarity)
+                "confidence": float(similarity)
             })
 
         except Exception as e:
@@ -620,7 +581,8 @@ def take_attendance_with_session(request):
             return JsonResponse({"error": str(e)}, status=400)
             
     return JsonResponse({"message": "Use POST request."})
-    
+
+
 @csrf_exempt
 def detect_faces(request):
     if request.method == "POST":
@@ -632,20 +594,20 @@ def detect_faces(request):
 
             img_str = re.sub("^data:image/.+;base64,", "", image_data)
             img_bytes = base64.b64decode(img_str)
+
+            detected_faces = detect_faces_rekognition(img_bytes)
+            
             nparr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            # Detect faces using DeepFace
-            faces = detect_faces_deepface(rgb_frame)
+            height, width = frame.shape[:2]
+            
             faces_list = []
-            for face in faces:
-                # face = [x, y, w, h]
+            for face in detected_faces:
                 faces_list.append({
-                    "top": face[1], 
-                    "right": face[0] + face[2], 
-                    "bottom": face[1] + face[3], 
-                    "left": face[0]
+                    "top": int(face['top'] * height),
+                    "right": int((face['left'] + face['width']) * width),
+                    "bottom": int((face['top'] + face['height']) * height),
+                    "left": int(face['left'] * width)
                 })
 
             return JsonResponse({"faces": faces_list})
@@ -655,7 +617,13 @@ def detect_faces(request):
 
 
 # ========================================
-# CLASS MANAGEMENT FUNCTIONS
+# REST OF THE VIEWS (unchanged)
+# ========================================
+# Include all remaining view functions from the original code
+# (class_management, get_teacher_classes, create_session, etc.)
+
+# ========================================
+# REST OF THE VIEWS (Class Management, Sessions, etc.)
 # ========================================
 
 @login_required
