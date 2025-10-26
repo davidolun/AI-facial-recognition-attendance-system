@@ -351,92 +351,107 @@
     }
 
     function captureStudent() {
-      const name = document.getElementById("studentName").value.trim();
-      const studentId = document.getElementById("studentId").value.trim();
-      const email = document.getElementById("email").value.trim();
-      const phone = document.getElementById("phone").value.trim();
+  const name = document.getElementById("studentName").value.trim();
+  const studentId = document.getElementById("studentId").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  
+  if (!name) {
+    statusEl.textContent = "❌ Please enter student name";
+    statusEl.className = "status error";
+    document.getElementById("studentName").focus();
+    return;
+  }
+
+  console.log('📸 Capturing student photo...');
+  console.log('Name:', name);
+  console.log('Student ID:', studentId || 'Auto-generated');
+
+  statusEl.textContent = "🔄 Processing with AWS Rekognition... Please wait";
+  statusEl.className = "status processing";
+  captureBtn.disabled = true;
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  const imageData = canvas.toDataURL("image/png");
+  console.log('📷 Image captured, sending to server...');
+
+  fetch("/add_student/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": getCookie("csrftoken")
+    },
+    body: JSON.stringify({
+      name: name,
+      student_id: studentId,
+      email: email,
+      phone: phone,
+      image: imageData
+    })
+  })
+  .then(response => {
+    console.log('📡 Server response status:', response.status);
+    return response.json();
+  })
+  .then(data => {
+    console.log('📦 Server response:', data);
+    
+    if (data.error) {
+      console.error('❌ Error from server:', data.error);
+      statusEl.textContent = "❌ Error: " + data.error;
+      statusEl.className = "status error";
+      statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      console.log('✅ Student added successfully!');
+      statusEl.textContent = "✅ " + data.message;
+      statusEl.className = "status success";
       
-      if (!name) {
-        statusEl.textContent = "❌ Please enter student name";
-        statusEl.className = "status error";
-        document.getElementById("studentName").focus();
-        return;
-      }
-
-      console.log('📸 Capturing student photo...');
-      console.log('Name:', name);
-      console.log('Student ID:', studentId || 'Auto-generated');
-
-      statusEl.textContent = "🔄 Processing with AWS Rekognition... Please wait";
-      statusEl.className = "status processing";
-      captureBtn.disabled = true;
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const imageData = canvas.toDataURL("image/png");
-      console.log('📷 Image captured, sending to server...');
-
-      // ✅ CORRECTED ENDPOINT - Changed from /add_student_deepface/ to /add_student/
-      fetch("/add_student/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": getCookie("csrftoken")
-        },
-        body: JSON.stringify({
-          name: name,
-          student_id: studentId,
-          email: email,
-          phone: phone,
-          image: imageData
-        })
-      })
-      .then(response => {
-        console.log('📡 Server response status:', response.status);
-        return response.json();
-      })
-      .then(data => {
-        console.log('📦 Server response:', data);
-        
-        if (data.error) {
-          console.error('❌ Error from server:', data.error);
-          statusEl.textContent = "❌ Error: " + data.error;
-          statusEl.className = "status error";
-          statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          console.log('✅ Student added successfully!');
-          statusEl.textContent = "✅ " + data.message;
-          statusEl.className = "status success";
-          statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          
-          // Trigger onboarding event
-          dispatchStudentAddedEvent(name, studentId || data.student_id);
-          
-          // Clear form
-          document.getElementById("studentName").value = "";
-          document.getElementById("studentId").value = "";
-          document.getElementById("email").value = "";
-          document.getElementById("phone").value = "";
-          
-          // Stop camera after delay
-          setTimeout(() => {
-            stopCamera();
-          }, 2000);
-        }
-      })
-      .catch(err => {
-        console.error('❌ Network error:', err);
-        statusEl.textContent = "❌ Network error: " + err.message;
-        statusEl.className = "status error";
+      // ✅ FIX: Check if onboarding is active before scrolling
+      const isOnboardingActive = window.onboardingSystem && window.onboardingSystem.isActive;
+      
+      if (isOnboardingActive) {
+        // During onboarding: scroll to TOP (navigation area) instead of status
+        console.log('🎯 Onboarding active - scrolling to navigation');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        // Normal operation: scroll to status message
         statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      })
-      .finally(() => {
-        captureBtn.disabled = false;
-      });
+      }
+      
+      // Trigger onboarding event
+      dispatchStudentAddedEvent(name, studentId || data.student_id);
+      
+      // Clear form
+      document.getElementById("studentName").value = "";
+      document.getElementById("studentId").value = "";
+      document.getElementById("email").value = "";
+      document.getElementById("phone").value = "";
+      
+      // Stop camera after delay (only if not in onboarding)
+      if (!isOnboardingActive) {
+        setTimeout(() => {
+          stopCamera();
+        }, 2000);
+      }
     }
+  })
+  .catch(err => {
+    console.error('❌ Network error:', err);
+    statusEl.textContent = "❌ Network error: " + err.message;
+    statusEl.className = "status error";
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  })
+  .finally(() => {
+    captureBtn.disabled = false;
+  });
+}
+
+
+
 
     function getCookie(name) {
       let cookieValue = null;

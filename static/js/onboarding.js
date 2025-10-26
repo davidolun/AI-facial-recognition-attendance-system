@@ -209,18 +209,31 @@ class OnboardingSystem {
                 console.log('✅ Correct step! Advancing onboarding...');
                 studentAddedProcessing = true;
                 
-                // On mobile, scroll to top so navigation is visible
+                // ✅ FIX: Ensure navigation is visible on mobile BEFORE showing overlay
                 if (window.innerWidth <= 768) {
+                    console.log('📱 Mobile detected - scrolling to navigation first');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-                
-                this.showOverlay();
-                setTimeout(() => {
-                    this.nextStep();
+                    
+                    // Wait for scroll to complete, then show overlay
                     setTimeout(() => {
-                        studentAddedProcessing = false;
-                    }, 2000);
-                }, 500);
+                        this.showOverlay();
+                        setTimeout(() => {
+                            this.nextStep();
+                            setTimeout(() => {
+                                studentAddedProcessing = false;
+                            }, 2000);
+                        }, 500);
+                    }, 600); // Wait for scroll animation
+                } else {
+                    // Desktop: proceed normally
+                    this.showOverlay();
+                    setTimeout(() => {
+                        this.nextStep();
+                        setTimeout(() => {
+                            studentAddedProcessing = false;
+                        }, 2000);
+                    }, 500);
+                }
             }
         };
         
