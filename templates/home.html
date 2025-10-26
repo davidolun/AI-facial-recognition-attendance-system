@@ -863,6 +863,15 @@ function captureFrame() {
                     const studentName = data.message.split("Attendance taken: ")[1].split(" (")[0];
                     speakAttendance(`Attendance taken for ${studentName}`);
                 }
+
+                // ✅ FIX: Check if onboarding is active before scrolling
+                const isOnboardingActive = window.onboardingSystem && window.onboardingSystem.isActive;
+                
+                if (isOnboardingActive) {
+                    // During onboarding: scroll to TOP (navigation area) instead of status
+                    console.log('🎯 Onboarding active - scrolling to navigation for next step');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
                 
                 // Trigger onboarding event
                 const event = new CustomEvent('attendanceTaken', {
@@ -876,7 +885,7 @@ function captureFrame() {
                 document.dispatchEvent(event);
             }
             
-            statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             
             // Update progress
             if (data.attendance_count !== undefined) {

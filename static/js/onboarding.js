@@ -774,11 +774,12 @@ class OnboardingSystem {
 
                 // FIRST: Scroll the target element into view
                 // This ensures the navigation is visible before positioning the modal
-                targetElement.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'start',
-                    inline: 'nearest'
-                });
+                const targetRect = targetElement.getBoundingClientRect();
+                const scrollTop = window.pageYOffset + targetRect.top - 80; // 80px from top
+                window.scrollTo({ 
+                top: Math.max(0, scrollTop), 
+                behavior: 'smooth' 
+});
 
                 // THEN: Wait for scroll to complete and position modal
                 setTimeout(() => {
@@ -999,11 +1000,21 @@ class OnboardingSystem {
                 }
                 
                 setTimeout(() => {
-                    element.scrollIntoView({ 
-                        behavior: 'smooth', 
-                        block: 'center',
-                        inline: 'center'
-                    });
+                    // ✅ FIX: Add offset for mobile to prevent element being too close to top
+                    if (window.innerWidth <= 768) {
+                        const elementRect = element.getBoundingClientRect();
+                        const scrollTop = window.pageYOffset + elementRect.top - 80; // 80px from top
+                        window.scrollTo({ 
+                            top: Math.max(0, scrollTop), 
+                            behavior: 'smooth' 
+                        });
+                    } else {
+                        element.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center',
+                            inline: 'center'
+                        });
+                    }
                 }, 100);
             } else {
                 console.warn('Element not found:', selector);
