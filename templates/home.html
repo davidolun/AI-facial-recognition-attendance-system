@@ -676,6 +676,12 @@ if (!isOnboardingActive) {
     setTimeout(() => {
         console.log('Auto-starting camera for selected session:', selectedSession.name);
         startCamera();
+        
+        // Scroll to camera section
+        const cameraSection = document.querySelector('.cam');
+        
+            cameraSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
     }, 500);
 } else {
     console.log('🎯 Onboarding active - skipping auto-start, waiting for manual click');

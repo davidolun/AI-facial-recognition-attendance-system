@@ -47,13 +47,16 @@ Answer questions about attendance, absences, late arrivals, and student records 
 """
 
     try:
+        # Initialize OpenAI client if needed
         global client
-        if OPENAI_AVAILABLE and client is None:
-            from openai import OpenAI
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-        if not OPENAI_AVAILABLE or client is None:
+        if not OPENAI_AVAILABLE:
             return "AI assistant is currently unavailable. Please try again later."
+        
+        if client is None:
+            try:
+                client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            except Exception as e:
+                return f"AI initialization error: {str(e)}"
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.extend(conversation_history[-6:])

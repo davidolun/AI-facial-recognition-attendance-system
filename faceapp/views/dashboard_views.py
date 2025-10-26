@@ -129,7 +129,12 @@ def get_complete_attendance_data(teacher=None):
 def dashboard(request):
     """Render the main dashboard page"""
     needs_onboarding = not request.user.onboarding_completed
-    return render(request, 'dashboard.html', {'needs_onboarding': needs_onboarding})
+    context = {
+        'needs_onboarding': needs_onboarding,
+        'user': request.user,
+        'user_name': request.user.get_full_name() or request.user.username
+    }
+    return render(request, 'dashboard.html', context)
 
 
 @login_required

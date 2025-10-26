@@ -918,7 +918,7 @@ class OnboardingSystem {
         const textEl = document.getElementById('onboarding-text');
         
         if (titleEl) titleEl.textContent = '🎉 All Done!';
-        if (textEl) textEl.textContent = 'You can always restart the tour from your settings. Happy teaching!';
+        if (textEl) textEl.textContent = "Don't forget to explore the 'View Records', 'Advanced Analytics', and 'AI Assistant' pages. You can always restart the tour from your slidebar. Enjoy!'";
         
         const skipBtn = document.getElementById('onboarding-skip');
         const prevBtn = document.getElementById('onboarding-prev');

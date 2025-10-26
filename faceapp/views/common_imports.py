@@ -28,6 +28,17 @@ try:
 except ImportError:
     IMAGE_PROCESSING_AVAILABLE = False
 
+# OpenAI availability
+OPENAI_AVAILABLE = False
+client = None
+if os.getenv('DISABLE_OPENAI', 'false').lower() != 'true':
+    try:
+        from openai import OpenAI
+        OPENAI_AVAILABLE = True
+    except ImportError:
+        OPENAI_AVAILABLE = False
+        print("Warning: OpenAI not available. AI features will be disabled.")
+
 # Configure Cloudinary
 cloudinary_config(
     cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', 'duu7pc7s3'),
