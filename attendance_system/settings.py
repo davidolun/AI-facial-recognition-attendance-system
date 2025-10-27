@@ -216,9 +216,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Cloudinary Configuration
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME', 'duu7pc7s3'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY', '625655631397579'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET', 'HEE8Or7rvr7SBOv61t5CWsSRUIs'),
+    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
+    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
 }
 
 # Use Cloudinary for media files in production

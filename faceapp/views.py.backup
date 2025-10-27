@@ -25,9 +25,9 @@ except Exception as e:
 
 # Configure Cloudinary
 cloudinary_config(
-    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME', 'duu7pc7s3'),
-    api_key=os.getenv('CLOUDINARY_API_KEY', '625655631397579'),
-    api_secret=os.getenv('CLOUDINARY_API_SECRET', 'HEE8Or7rvr7SBOv61t5CWsSRUIs')
+    cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key=os.getenv('CLOUDINARY_API_KEY'),
+    api_secret=os.getenv('CLOUDINARY_API_SECRET')
 )
 
 # Import image processing libraries
