@@ -35,32 +35,77 @@
             align-items: center;
             justify-content: center;
             padding: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        body::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            top: -250px;
+            right: -250px;
+            animation: float 20s ease-in-out infinite;
+        }
+        
+        body::after {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            bottom: -200px;
+            left: -200px;
+            animation: float 25s ease-in-out infinite reverse;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(30px, 30px) rotate(180deg); }
         }
         
         .auth-container {
             background: white;
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 3rem;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5);
             width: 100%;
-            max-width: 500px;
+            max-width: 550px;
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(10px);
         }
         
         .auth-header {
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
         }
         
         .auth-header h1 {
-            color: var(--dark);
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.5px;
         }
         
         .auth-header p {
             color: var(--gray);
-            font-size: 0.95rem;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
+        .form-icon {
+            display: inline-block;
+            margin-right: 0.5rem;
+            font-size: 1.2rem;
         }
         
         .form-group {
@@ -83,18 +128,26 @@
         
         input[type="text"], input[type="email"], input[type="password"], select {
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.875rem 1rem;
             border: 2px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 0.95rem;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
+            background: #f9fafb;
+            color: var(--dark);
+        }
+        
+        input:hover {
+            border-color: #9ca3af;
             background: white;
         }
         
         input:focus, select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            background: white;
+            transform: translateY(-1px);
         }
         
         .required {
@@ -109,21 +162,27 @@
         
         .submit-btn {
             width: 100%;
-            padding: 0.875rem;
-            background: var(--primary);
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
-            margin-top: 1rem;
+            transition: all 0.3s ease;
+            margin-top: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(102, 126, 234, 0.3), 0 2px 4px -1px rgba(102, 126, 234, 0.2);
+            letter-spacing: 0.5px;
         }
         
         .submit-btn:hover:not(:disabled) {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(102, 126, 234, 0.4), 0 4px 6px -2px rgba(102, 126, 234, 0.3);
+        }
+        
+        .submit-btn:active:not(:disabled) {
+            transform: translateY(0);
         }
         
         .submit-btn:disabled {
@@ -241,8 +300,8 @@
 <body>
     <div class="auth-container">
         <div class="auth-header">
-            <h1>Create Teacher Account</h1>
-            <p>Join the smart attendance system</p>
+            <h1>👋 Create Teacher Account</h1>
+            <p>Join the smart attendance system today</p>
         </div>
         
         <div id="alert" class="alert"></div>
@@ -250,43 +309,43 @@
         <form id="signupForm">
             <div class="form-row">
                 <div class="form-group">
-                    <label for="first_name">First Name <span class="required">*</span></label>
+                    <label for="first_name">👤 First Name <span class="required">*</span></label>
                     <input type="text" id="first_name" name="first_name" required>
                 </div>
                 <div class="form-group">
-                    <label for="last_name">Last Name <span class="required">*</span></label>
+                    <label for="last_name">👤 Last Name <span class="required">*</span></label>
                     <input type="text" id="last_name" name="last_name" required>
                 </div>
             </div>
             
             <div class="form-group">
-                <label for="username">Username <span class="required">*</span></label>
+                <label for="username">🔐 Username <span class="required">*</span></label>
                 <input type="text" id="username" name="username" required>
             </div>
             
             <div class="form-group">
-                <label for="email">Email Address <span class="required">*</span></label>
+                <label for="email">📧 Email Address <span class="required">*</span></label>
                 <input type="email" id="email" name="email" required>
             </div>
             
             <div class="form-group">
-                <label for="department">Department <span class="required">*</span></label>
+                <label for="department">🏫 Department <span class="required">*</span></label>
                 <input type="text" id="department" name="department" placeholder="Mathematics" required>
             </div>
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="phone">Phone Number <span class="optional">(Optional)</span></label>
+                    <label for="phone">📱 Phone Number <span class="optional">(Optional)</span></label>
                     <input type="text" id="phone" name="phone" placeholder="(555) 123-4567">
                 </div>
                 <div class="form-group">
-                    <label for="employee_id">Employee ID <span class="optional">(Optional)</span></label>
+                    <label for="employee_id">🆔 Employee ID <span class="optional">(Optional)</span></label>
                     <input type="text" id="employee_id" name="employee_id" placeholder="EMP001">
                 </div>
             </div>
             
             <div class="form-group">
-                <label for="password">Password <span class="required">*</span></label>
+                <label for="password">🔒 Password <span class="required">*</span></label>
                 <input type="password" id="password" name="password" required>
                 <div class="password-strength">
                     <div class="strength-bar">
@@ -297,12 +356,12 @@
             </div>
             
             <div class="form-group">
-                <label for="confirm_password">Confirm Password <span class="required">*</span></label>
+                <label for="confirm_password">🔒 Confirm Password <span class="required">*</span></label>
                 <input type="password" id="confirm_password" name="confirm_password" required>
             </div>
             
             <button type="submit" class="submit-btn">
-                <span id="btnText">Create Account</span>
+                <span id="btnText">✨ Create Account</span>
                 <div id="btnLoading" class="loading">
                     <div class="spinner"></div>
                     <span>Creating Account...</span>
