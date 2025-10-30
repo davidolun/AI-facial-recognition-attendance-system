@@ -17,7 +17,7 @@
   <style>
     :root { --w: 1200px; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0e13; color:#e5e7eb; margin:0; padding:2rem; }
-    h1 { margin: 0 0 1rem; font-size: 1.8rem; font-weight: 600; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    h1 { margin: 0 0 1rem; font-size: 1.8rem; font-weight: 600; background: linear-gradient(135deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
     .wrap { max-width: var(--w); margin: 0 auto; }
     
     .nav-links {
@@ -427,30 +427,54 @@ const sessionInfo = document.getElementById('sessionInfo');
 // Text-to-speech functionality
 let isMuted = false;
 let speechSynthesis = window.speechSynthesis;
+let speechSynthesisReady = false; // Track if TTS has been initialized
+
+// Initialize speech synthesis on first user interaction
+function initializeSpeechSynthesis() {
+    if (speechSynthesisReady || !speechSynthesis) return;
+    
+    try {
+        // Try to get voices to initialize speech synthesis
+        const voices = speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            speechSynthesisReady = true;
+            console.log('✅ Speech synthesis initialized');
+        }
+    } catch (e) {
+        console.warn('Speech synthesis not available:', e);
+    }
+}
 
 function speakAttendance(message) {
-    if (isMuted || !speechSynthesis) return;
+    if (isMuted || !speechSynthesis || !speechSynthesisReady) {
+        console.log('TTS skipped - muted or not ready');
+        return;
+    }
     
-    speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 0.8;
-    
-    const speak = () => {
-        const voices = speechSynthesis.getVoices();
-        const preferredVoice = voices.find(voice => 
-            voice.lang.startsWith('en') && 
-            (voice.name.includes('Google') || voice.name.includes('Microsoft'))
-        );
-        if (preferredVoice) utterance.voice = preferredVoice;
-        speechSynthesis.speak(utterance);
-    };
-    
-    if (speechSynthesis.getVoices().length > 0) {
-        speak();
-    } else {
-        speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
+    try {
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(message);
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        utterance.volume = 0.8;
+        
+        const speak = () => {
+            const voices = speechSynthesis.getVoices();
+            const preferredVoice = voices.find(voice => 
+                voice.lang.startsWith('en') && 
+                (voice.name.includes('Google') || voice.name.includes('Microsoft'))
+            );
+            if (preferredVoice) utterance.voice = preferredVoice;
+            speechSynthesis.speak(utterance);
+        };
+        
+        if (speechSynthesis.getVoices().length > 0) {
+            speak();
+        } else {
+            speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
+        }
+    } catch (e) {
+        console.warn('Speech synthesis error:', e);
     }
 }
 
@@ -946,6 +970,11 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+// Initialize speech synthesis on first user interaction
+document.addEventListener('click', function() {
+    initializeSpeechSynthesis();
+}, { once: true });
 
 // Event listeners
 sessionSelect.addEventListener('change', updateSessionInfo);
