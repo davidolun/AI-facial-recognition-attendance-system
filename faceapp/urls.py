@@ -10,6 +10,7 @@ from .views import (
     add_student,
     get_all_students,
     get_teacher_students,
+    delete_student,
     # Attendance views
     take_attendance_with_session,
     detect_faces,
@@ -47,6 +48,7 @@ urlpatterns = [
     path('add_student/', add_student, name='add_student'),
     path('get_all_students/', get_all_students, name='get_all_students'),
     path('get_teacher_students/', get_teacher_students, name='get_teacher_students'),
+    path('delete_student/<int:student_id>/', delete_student, name='delete_student'),
     
     # Attendance URLs
     path('take_attendance/', take_attendance_with_session, name='take_attendance'),

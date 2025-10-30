@@ -12,6 +12,7 @@ from .student_views import (
     add_student,
     get_all_students,
     get_teacher_students,
+    delete_student,
 )
 
 from .attendance_views import (
@@ -50,6 +51,7 @@ __all__ = [
     'add_student',
     'get_all_students',
     'get_teacher_students',
+    'delete_student',
     # Attendance
     'take_attendance_with_session',
     'detect_faces',

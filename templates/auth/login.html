@@ -193,8 +193,8 @@
         }
         
         .demo-info {
-            background: rgba(59, 130, 246, 0.05);
-            border: 1px solid rgba(59, 130, 246, 0.2);
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
             border-radius: 10px;
             padding: 1rem;
             margin-bottom: 1.5rem;
@@ -202,7 +202,7 @@
         }
         
         .demo-info h3 {
-            color: var(--primary);
+            color: var(--success);
             font-size: 0.9rem;
             margin-bottom: 0.5rem;
             font-weight: 600;
@@ -212,6 +212,55 @@
             font-size: 0.85rem;
             color: var(--gray);
             line-height: 1.4;
+            margin-bottom: 0.75rem;
+        }
+        
+        .demo-btn {
+            background: linear-gradient(135deg, var(--success) 0%, #16a34a 100%);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.3);
+            width: 100%;
+        }
+        
+        .demo-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px -3px rgba(34, 197, 94, 0.4);
+            background: linear-gradient(135deg, #16a34a 0%, var(--success) 100%);
+        }
+        
+        .demo-btn:active {
+            transform: translateY(0);
+        }
+        
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.5rem 0;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+        
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .divider::before {
+            margin-right: 0.75rem;
+        }
+        
+        .divider::after {
+            margin-left: 0.75rem;
         }
         
         @media (max-width: 480px) {
@@ -243,11 +292,19 @@
         </div>
         
         <div class="demo-info">
-            <h3>Demo Account</h3>
-            <p>Use any username/password to test the system, or create a new account</p>
+            <h3>🎯 Try Demo Account</h3>
+            <p>Want to explore without creating an account? Click below to login with a demo account.</p>
+            <p style="font-size: 0.75rem; color: #6b7280; margin-top: 0.75rem; font-weight: 500;">
+                ℹ️ Demo account data is shared. All demo users will see the same students and classes.
+            </p>
+            <button type="button" class="demo-btn" onclick="loginAsDemo()">
+                🚀 Login as Demo User
+            </button>
         </div>
         
         <div id="alert" class="alert"></div>
+        
+        <div class="divider">Or sign in manually</div>
         
         <form id="loginForm">
             <div class="form-group">
@@ -372,6 +429,51 @@
             }
         });
 
+        // Demo account login function
+        async function loginAsDemo() {
+            hideAlert();
+            setLoading(true);
+            
+            // Demo credentials
+            const demoUsername = 'demo_teacher';
+            const demoPassword = 'demo123456';
+            
+            try {
+                const response = await fetch('/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify({
+                        username: demoUsername,
+                        password: demoPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showAlert('🎉 Logging in as demo user!', 'success');
+                    // Set flag to initiate onboarding for demo account
+                    localStorage.setItem('start_tour_on_load', 'true');
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    showAlert('Demo account not available. Please create an account.', 'error');
+                    setTimeout(() => {
+                        window.location.href = '/signup/';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Demo login error:', error);
+                showAlert('Network error. Please try again.', 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+        
         // Auto-focus username field
         document.getElementById('username').focus();
         

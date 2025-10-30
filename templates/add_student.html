@@ -28,6 +28,7 @@
       font-weight: 600; 
       background: linear-gradient(135deg, #3b82f6, #8b5cf6);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
     }
     .wrap { max-width: var(--w); margin: 0 auto; }
@@ -243,6 +244,19 @@
     
     <h1>👤 Add New Student</h1>
     
+    <!-- No Classes Message (hidden by default) -->
+    <div id="noClassesMessage" class="form-section" style="display: none; text-align: center;">
+      <h2 style="color: #f59e0b; margin-bottom: 1rem;">⚠️ No Classes Found</h2>
+      <p style="color: #9ca3af; margin-bottom: 1.5rem; line-height: 1.6;">
+        You need to create at least one class before you can add students. Students are automatically added to your classes when you create them.
+      </p>
+      <a href="/class_management/" class="primary-btn" style="display: inline-block; text-decoration: none; padding: 0.75rem 2rem; border-radius: 10px;">
+        ✨ Create Your First Class
+      </a>
+    </div>
+    
+    <!-- Student Form (hidden when no classes) -->
+    <div id="studentFormContainer">
     <div class="form-section">
       <div class="form-group">
         <label for="studentName">Student Name <span class="required">*</span></label>
@@ -284,6 +298,7 @@
     
     <div id="status" class="status info">Click "Start Camera" to begin</div>
     <canvas id="canvas" style="display:none;"></canvas>
+    </div> <!-- Close studentFormContainer -->
   </div>
 
   <!-- Include Onboarding System -->
@@ -299,6 +314,32 @@
     let stream;
 
     console.log('🚀 Add Student page initialized with AWS Rekognition');
+
+    // Check if teacher has classes on page load
+    async function checkClasses() {
+      try {
+        const response = await fetch('/get_teacher_classes/');
+        const data = await response.json();
+        
+        if (data.classes && data.classes.length > 0) {
+          // Teacher has classes - show form
+          document.getElementById('studentFormContainer').style.display = 'block';
+          document.getElementById('noClassesMessage').style.display = 'none';
+        } else {
+          // No classes - show message
+          document.getElementById('studentFormContainer').style.display = 'none';
+          document.getElementById('noClassesMessage').style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Error checking classes:', error);
+        // On error, assume they have classes and show form
+        document.getElementById('studentFormContainer').style.display = 'block';
+        document.getElementById('noClassesMessage').style.display = 'none';
+      }
+    }
+
+    // Run check on page load
+    checkClasses();
 
     function dispatchStudentAddedEvent(name, studentId) {
       console.log('=== DISPATCHING STUDENT ADDED EVENT ===');
@@ -376,7 +417,7 @@
   console.log('Name:', name);
   console.log('Student ID:', studentId || 'Auto-generated');
 
-  statusEl.textContent = "🔄 Processing with AWS Rekognition... Please wait";
+  statusEl.textContent = "🔄 Processing with ... Please wait";
   statusEl.className = "status processing";
   captureBtn.disabled = true;
 

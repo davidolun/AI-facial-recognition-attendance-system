@@ -156,14 +156,6 @@
             display: block;
         }
         
-        .subtab-content {
-            display: none;
-        }
-        
-        .subtab-content.active {
-            display: block;
-        }
-        
         .student-status {
             display: inline-block;
             padding: 0.25rem 0.5rem;
@@ -699,63 +691,26 @@
         
         <!-- Manage Students Tab -->
         <div id="students" class="tab-content">
-            <!-- Navigation Tabs for Student Management -->
-            <div class="nav-tabs" style="margin-bottom: 1.5rem;">
-                <button class="nav-tab active" data-subtab="my-students">My Students</button>
-                <button class="nav-tab" data-subtab="all-students">Add Students</button>
-            </div>
-
-            <!-- My Students Section -->
-            <div id="my-students" class="subtab-content active">
-                <div class="card">
-                    <h2>Students in Your Classes</h2>
-                    
-                    <div style="margin-bottom: 1rem;">
-                        <label for="filterByClass">Filter by Class:</label>
-                        <select id="filterByClass" style="margin-left: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
-                            <option value="">All Classes</option>
-                        </select>
-                    </div>
-                    
-                    <div id="studentsLoading" class="loading" style="display: none;">
-                        <div class="spinner"></div>
-                        <span>Loading students...</span>
-                    </div>
-                    
-                    <div id="studentsContainer">
-                        <div id="studentsGrid" class="classes-grid"></div>
-                        <div id="emptyStudents" class="empty-state" style="display: none;">
-                            <h3>No Students Found</h3>
-                            <p>No students have been added to your classes yet.</p>
-                            <button onclick="switchToAddStudentTab()" class="create-class-btn" style="margin-top: 1rem;">
-                                👤 Add Student
-                            </button>
-                        </div>
-                    </div>
+            <div class="card">
+                <h2>Students in Your Classes</h2>
+                
+                <div style="margin-bottom: 1rem;">
+                    <label for="filterByClass">Filter by Class:</label>
+                    <select id="filterByClass" style="margin-left: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
+                        <option value="">All Classes</option>
+                    </select>
                 </div>
-            </div>
-
-            <!-- All Students Section -->
-            <div id="all-students" class="subtab-content">
-                <div class="card">
-                    <h2>All Students in System</h2>
-                    <p style="color: var(--gray); margin-bottom: 1rem;">
-                        Here you can view all students in the system and add them to your classes.
-                    </p>
-                    
-                    <div id="allStudentsAlert" class="alert"></div>
-                    
-                    <div id="allStudentsLoading" class="loading" style="display: none;">
-                        <div class="spinner"></div>
-                        <span>Loading all students...</span>
-                    </div>
-                    
-                    <div id="allStudentsContainer">
-                        <div id="allStudentsGrid" class="classes-grid"></div>
-                        <div id="emptyAllStudents" class="empty-state" style="display: none;">
-                            <h3>No Students Found</h3>
-                            <p>No students have been created in the system yet.</p>
-                        </div>
+                
+                <div id="studentsLoading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Loading students...</span>
+                </div>
+                
+                <div id="studentsContainer">
+                    <div id="studentsGrid" class="classes-grid"></div>
+                    <div id="emptyStudents" class="empty-state" style="display: none;">
+                        <h3>No Students Found</h3>
+                        <p>No students have been added to your classes yet. Go to "Add Student" in the navigation menu to add students.</p>
                     </div>
                 </div>
             </div>
@@ -861,28 +816,6 @@
                     } else if (tabId === 'students') {
                         populateFilterDropdown();
                         loadStudents();
-                        // Default to my-students subtab
-                        document.querySelector('[data-subtab="my-students"]').classList.add('active');
-                        document.getElementById('my-students').classList.add('active');
-                    }
-                }
-                
-                if (subtabId) {
-                    // Subtab switching within students tab
-                    document.querySelectorAll('.nav-tab').forEach(t => {
-                        if (t.dataset.subtab) t.classList.remove('active');
-                    });
-                    tab.classList.add('active');
-                    
-                    document.querySelectorAll('.subtab-content').forEach(content => content.classList.remove('active'));
-                    document.getElementById(subtabId).classList.add('active');
-                    
-                    // Load appropriate data
-                    if (subtabId === 'my-students') {
-                        populateFilterDropdown();
-                        loadStudents();
-                    } else if (subtabId === 'all-students') {
-                        loadAllStudents();
                     }
                 }
             });
@@ -1163,14 +1096,6 @@
             }
         }
 
-        function switchToAddStudentTab() {
-            // Find and click the Add Students subtab
-            const addStudentTab = document.querySelector('[data-subtab="all-students"]');
-            if (addStudentTab) {
-                addStudentTab.click();
-            }
-        }
-
         // Populate class dropdown for session creation
         function populateClassDropdown() {
             const classSelect = document.getElementById('sessionClass');
@@ -1312,7 +1237,6 @@
         // =============== STUDENT MANAGEMENT FUNCTIONS ===============
         
         let allStudents = [];
-        let allSystemStudents = [];
 
         // Populate filter dropdown for student list
         function populateFilterDropdown() {
@@ -1350,28 +1274,6 @@
                 showAlert('allStudentsAlert', 'Error loading students: ' + error.message, 'error');
             } finally {
                 document.getElementById('studentsLoading').style.display = 'none';
-            }
-        }
-
-        // Load ALL students in the system
-        async function loadAllStudents() {
-            document.getElementById('allStudentsLoading').style.display = 'flex';
-            
-            try {
-                const response = await fetch('/get_all_students/');
-                const data = await response.json();
-                
-                if (data.students) {
-                    allSystemStudents = data.students;
-                    renderAllStudents();
-                } else {
-                    throw new Error(data.error || 'Failed to load all students');
-                }
-            } catch (error) {
-                console.error('Error loading all students:', error);
-                showAlert('allStudentsAlert', 'Error loading students: ' + error.message, 'error');
-            } finally {
-                document.getElementById('allStudentsLoading').style.display = 'none';
             }
         }
 
@@ -1421,123 +1323,12 @@
                         <button class="btn btn-primary btn-small" onclick="showManageStudentModal(${student.id}, '${student.name}', ${JSON.stringify(student.classes || []).replace(/"/g, '&quot;')})">
                             Manage Classes
                         </button>
+                        <button class="btn btn-error btn-small" onclick="deleteStudent(${student.id}, '${student.name}')">
+                            🗑️ Delete
+                        </button>
                     </div>
                 </div>
             `).join('');
-        }
-
-        function renderAllStudents() {
-            const grid = document.getElementById('allStudentsGrid');
-            const empty = document.getElementById('emptyAllStudents');
-            
-            if (allSystemStudents.length === 0) {
-                grid.style.display = 'none';
-                empty.style.display = 'block';
-                return;
-            }
-            
-            grid.style.display = 'grid';
-            empty.style.display = 'none';
-            
-            grid.innerHTML = allSystemStudents.map(student => {
-                const isInTeacherClasses = student.is_in_teacher_classes;
-                const statusClass = isInTeacherClasses ? 'in-class' : 'not-in-class';
-                const statusText = isInTeacherClasses ? 'In Your Classes' : 'Not in Your Classes';
-                
-                return `
-                    <div class="class-card">
-                        <div class="class-header">
-                            <div>
-                                <div class="class-name">${student.name}</div>
-                                <div class="class-code">${student.student_id || 'No ID'}</div>
-                                <div class="student-status ${statusClass}">${statusText}</div>
-                            </div>
-                        </div>
-                        
-                        <div style="margin: 1rem 0;">
-                            <div><strong>Email:</strong> ${student.email || 'Not provided'}</div>
-                            <div><strong>Phone:</strong> ${student.phone || 'Not provided'}</div>
-                            <div><strong>Current Classes:</strong></div>
-                            <div style="font-size: 0.9rem; color: var(--gray);">
-                                ${student.current_classes.length > 0 ? 
-                                    student.current_classes.map(cls => `${cls.name} (${cls.teacher_name})`).join('<br>') : 
-                                    'No classes assigned'
-                                }
-                            </div>
-                            ${isInTeacherClasses ? `
-                                <div style="margin-top: 0.5rem;"><strong>Your Classes:</strong></div>
-                                <div style="font-size: 0.9rem; color: var(--primary);">
-                                    ${student.teacher_classes.map(cls => cls.name).join(', ')}
-                                </div>
-                            ` : ''}
-                        </div>
-                        
-                        ${!isInTeacherClasses ? `
-                            <div class="class-selection">
-                                <label for="classSelect_${student.id}">Add to Class:</label>
-                                <select id="classSelect_${student.id}">
-                                    <option value="">Select a class...</option>
-                                    ${classes ? classes.map(cls => `<option value="${cls.id}">${cls.name} (${cls.code})</option>`).join('') : ''}
-                                </select>
-                            </div>
-                        ` : ''}
-                        
-                        <div class="class-actions">
-                            ${!isInTeacherClasses ? `
-                                <button class="btn btn-primary btn-small" onclick="addStudentToClass(${student.id}, '${student.name}')">
-                                    Add to Class
-                                </button>
-                            ` : `
-                                <button class="btn btn-warning btn-small" onclick="showManageStudentModal(${student.id}, '${student.name}', ${JSON.stringify(student.teacher_classes || []).replace(/"/g, '&quot;')})">
-                                    Manage Classes
-                                </button>
-                            `}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        // Add student to selected class
-        async function addStudentToClass(studentId, studentName) {
-            const classSelect = document.getElementById(`classSelect_${studentId}`);
-            const selectedClassId = classSelect.value;
-            
-            if (!selectedClassId) {
-                alert('Please select a class first');
-                return;
-            }
-            
-            try {
-                const response = await fetch('/assign_student_to_class/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        student_id: studentId,
-                        class_id: selectedClassId
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showAlert('allStudentsAlert', data.message, 'success');
-                    // Refresh the all students view
-                    loadAllStudents();
-                    // Also refresh the my students view if it's been loaded
-                    if (allStudents.length > 0) {
-                        loadStudents();
-                    }
-                } else {
-                    showAlert('allStudentsAlert', data.error || 'Failed to add student to class', 'error');
-                }
-            } catch (error) {
-                console.error('Error adding student to class:', error);
-                showAlert('allStudentsAlert', 'Network error. Please try again.', 'error');
-            }
         }
 
         // =============== MODAL FUNCTIONS ===============
@@ -1752,9 +1543,6 @@
                         closeManageStudentModal();
                         // Refresh data
                         loadStudents();
-                        if (allSystemStudents.length > 0) {
-                            loadAllStudents();
-                        }
                     }, 1500);
                 } else if (successCount > 0 && errorCount > 0) {
                     showAlert('manageClassAlert', `Partially successful: ${successCount} completed, ${errorCount} failed. Errors: ${errors.join('; ')}`, 'error');
@@ -1777,6 +1565,39 @@
                 closeManageStudentModal();
             }
         });
+
+        // Delete student function
+        async function deleteStudent(studentId, studentName) {
+            // Confirm deletion
+            const confirmMessage = `Are you sure you want to delete student "${studentName}"?\n\nThis will:\n- Remove all attendance records for this student\n- Remove the student from all classes\n- Delete the student permanently from your account\n\nThis action cannot be undone!`;
+            
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/delete_student/${studentId}/`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ ${studentName} has been deleted successfully!`);
+                    // Refresh student list
+                    loadStudents();
+                } else {
+                    alert(`❌ Error: ${data.error || 'Failed to delete student'}`);
+                }
+            } catch (error) {
+                console.error('Error deleting student:', error);
+                alert('❌ Network error. Please try again.');
+            }
+        }
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {

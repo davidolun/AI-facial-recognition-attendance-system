@@ -41,7 +41,7 @@ class Student(models.Model):
     email = models.EmailField(null=True, blank=True)
     phone = models.CharField(max_length=15, null=True, blank=True)
     image_path = models.CharField(max_length=255)
-    face_encoding = models.TextField(null=True, blank=True, help_text="DeepFace face embedding stored as JSON")
+    face_encoding = models.TextField(null=True, blank=True, help_text="AWS Rekognition Face ID stored as JSON")
     classes = models.ManyToManyField(Class, related_name='students', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)

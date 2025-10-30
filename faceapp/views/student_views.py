@@ -2,7 +2,9 @@
 Student management views for adding and retrieving students
 """
 from .common_imports import *
+from .face_recognition_utils import delete_face_rekognition
 import cloudinary.uploader
+import json
 
 
 @login_required
@@ -239,3 +241,80 @@ def get_teacher_students(request):
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@csrf_exempt
+def delete_student(request, student_id):
+    """Delete a student and all their data"""
+    logger.info(f"User {request.user.username} initiated student deletion for student ID {student_id}")
+    
+    if request.method != "DELETE":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    try:
+        # Get the student
+        student = Student.objects.get(id=student_id, is_active=True)
+        
+        # Check if student belongs to the teacher's classes
+        teacher_classes = Class.objects.filter(teacher=request.user, is_active=True)
+        student_classes = student.classes.filter(id__in=teacher_classes.values_list('id', flat=True))
+        
+        if not student_classes.exists():
+            logger.warning(f"Unauthorized deletion attempt: Student {student_id} not in teacher's classes")
+            return JsonResponse({"error": "You don't have permission to delete this student"}, status=403)
+        
+        # Extract face ID from face_encoding and delete from AWS Rekognition
+        if student.face_encoding:
+            try:
+                face_data = json.loads(student.face_encoding)
+                if 'face_id' in face_data:
+                    face_id = face_data['face_id']
+                    delete_face_rekognition(face_id)
+                    logger.info(f"Deleted face {face_id} from AWS Rekognition")
+            except Exception as e:
+                logger.warning(f"Failed to delete face from AWS: {e}")
+        
+        # Delete image from Cloudinary if stored there
+        try:
+            if student.image_path and isinstance(student.image_path, str) and student.image_path.startswith('http') and 'res.cloudinary.com' in student.image_path:
+                # Extract public_id from URL: .../upload/v<ver>/<folder>/<name>.<ext>
+                # We take the part after '/upload/' and drop version and extension
+                parts = student.image_path.split('/upload/')
+                if len(parts) == 2:
+                    tail = parts[1]
+                    # Remove version segment if present (e.g., v1729989999/)
+                    if tail.startswith('v'):
+                        tail = '/'.join(tail.split('/')[1:])
+                    # Drop file extension
+                    public_id = tail.rsplit('.', 1)[0]
+                    # Perform delete
+                    cloudinary.uploader.destroy(public_id, resource_type='image')
+                    logger.info(f"Deleted Cloudinary asset {public_id} for student {student.name}")
+        except Exception as e:
+            logger.warning(f"Failed to delete Cloudinary image for student {student.name}: {e}")
+
+        # Remove student from all classes
+        student.classes.clear()
+        
+        # Delete all attendance records for this student
+        attendance_count = AttendanceRecord.objects.filter(student=student).delete()[0]
+        logger.info(f"Deleted {attendance_count} attendance records for student {student.name}")
+        
+        # Mark student as inactive
+        student.is_active = False
+        student.save()
+        
+        logger.info(f"Student {student.name} deleted successfully by user {request.user.username}")
+        
+        return JsonResponse({
+            "message": f"Student {student.name} has been deleted successfully",
+            "attendance_records_deleted": attendance_count
+        })
+        
+    except Student.DoesNotExist:
+        logger.warning(f"Attempted to delete non-existent student ID {student_id}")
+        return JsonResponse({"error": "Student not found"}, status=404)
+    except Exception as e:
+        logger.error(f"Error deleting student: {str(e)}")
+        return JsonResponse({"error": str(e)}, status=400)
