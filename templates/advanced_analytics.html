@@ -456,6 +456,90 @@
             margin-bottom: 2rem;
         }
 
+        /* ML loading overlay */
+        #ml-loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(11, 14, 19, 0.92);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(6px);
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        #ml-loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .ml-loading-container {
+            text-align: center;
+            max-width: 360px;
+            padding: 2rem;
+            background: rgba(17, 24, 39, 0.85);
+            border-radius: 16px;
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            box-shadow: 0 20px 45px rgba(15, 23, 42, 0.45);
+        }
+
+        .ml-loading-spinner {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem auto;
+            border-radius: 50%;
+            border: 6px solid rgba(59, 130, 246, 0.15);
+            border-top-color: #3b82f6;
+            animation: ml-spin 1s linear infinite;
+        }
+
+        @keyframes ml-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .ml-loading-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #e5e7eb;
+            margin-bottom: 0.75rem;
+        }
+
+        .ml-loading-subtext {
+            color: #9ca3af;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .ml-loading-progress {
+            margin-top: 1.5rem;
+            text-align: left;
+        }
+
+        .ml-loading-progress-bar {
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.2);
+            overflow: hidden;
+        }
+
+        .ml-loading-progress-bar span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            transition: width 0.35s ease;
+        }
+
+        .ml-loading-progress-text {
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #9ca3af;
+            letter-spacing: 0.02em;
+        }
+
         .insight-item {
             display: flex;
             align-items: center;
@@ -552,6 +636,22 @@
 </head>
 <body>
     {% include 'includes/sidebar.html' %}
+
+    <div id="ml-loading-overlay">
+        <div class="ml-loading-container">
+            <div class="ml-loading-spinner"></div>
+            <div class="ml-loading-title" id="ml-loading-title">Training AI models…</div>
+            <p class="ml-loading-subtext" id="ml-loading-subtext">
+                Preparing 8 machine learning models for predictions, risk analysis, and pattern detection.
+            </p>
+            <div class="ml-loading-progress">
+                <div class="ml-loading-progress-bar">
+                    <span id="ml-loading-progress-bar"></span>
+                </div>
+                <div class="ml-loading-progress-text" id="ml-loading-progress-text">Initializing analytics…</div>
+            </div>
+        </div>
+    </div>
     
     <div class="container">
         <div class="nav-header">
@@ -784,22 +884,74 @@
         let analyticsData = null;
         let charts = {};
         let mlModel = null;
+        const mlLoadingOverlay = document.getElementById('ml-loading-overlay');
+        const mlLoadingTitle = document.getElementById('ml-loading-title');
+        const mlLoadingSubtext = document.getElementById('ml-loading-subtext');
+        const mlLoadingProgressBar = document.getElementById('ml-loading-progress-bar');
+        const mlLoadingProgressText = document.getElementById('ml-loading-progress-text');
+
+        function showMLLoading(title = 'Training AI models…', subtext = '') {
+            if (!mlLoadingOverlay) return;
+            mlLoadingOverlay.classList.remove('hidden');
+            if (mlLoadingTitle && title) mlLoadingTitle.textContent = title;
+            if (mlLoadingSubtext && subtext) mlLoadingSubtext.textContent = subtext;
+        }
+
+        function updateMLSubtext(subtext) {
+            if (mlLoadingSubtext && subtext) {
+                mlLoadingSubtext.textContent = subtext;
+            }
+        }
+
+        function updateMLProgress(percent, text = null) {
+            if (mlLoadingProgressBar) {
+                const clamped = Math.max(0, Math.min(100, percent));
+                mlLoadingProgressBar.style.width = `${clamped}%`;
+            }
+            if (mlLoadingProgressText && text) {
+                mlLoadingProgressText.textContent = text;
+            }
+        }
+
+        function hideMLLoading(delay = 0) {
+            if (!mlLoadingOverlay) return;
+            setTimeout(() => {
+                mlLoadingOverlay.classList.add('hidden');
+            }, delay);
+        }
+
+        function showMLError(message) {
+            showMLLoading('Analytics unavailable', message || 'Unable to prepare machine learning models. Please refresh and try again.');
+            updateMLProgress(0, 'Please refresh the page to retry.');
+            setTimeout(() => hideMLLoading(), 2500);
+        }
 
         // Initialize the dashboard
         document.addEventListener('DOMContentLoaded', function() {
             console.log('Advanced Analytics initializing...');
+            showMLLoading(
+                'Preparing advanced analytics…',
+                'Loading attendance history and preparing machine learning models. This may take a few seconds.'
+            );
+            updateMLProgress(8, 'Loading datasets…');
             initializeAnalytics();
         });
 
         async function initializeAnalytics() {
             try {
+                updateMLProgress(12, 'Fetching analytics data…');
+                updateMLSubtext('Loading attendance history and preparing datasets for the machine learning pipeline.');
                 // Fetch real analytics data from the API
                 analyticsData = await fetchAnalyticsData();
                 console.log('Analytics data loaded:', Object.keys(analyticsData));
 
+                updateMLProgress(35, 'Training 8 machine learning models…');
+                updateMLSubtext('Training predictive, risk assessment, and clustering models. This step can take a few seconds.');
                 // Initialize ML components
                 await initializeMachineLearning();
 
+                updateMLProgress(70, 'Rendering dashboards and insights…');
+                updateMLSubtext('Generating visualizations, AI insights, and risk assessments.');
                 // Update prediction stats with real data
                 updatePredictionStats();
 
@@ -816,10 +968,14 @@
                 populateFilters();
 
                 console.log('Advanced analytics initialization complete');
+                updateMLProgress(100, 'Analytics ready!');
+                updateMLSubtext('All models are trained and dashboards are up to date.');
+                hideMLLoading(600);
 
             } catch (error) {
                 console.error('Failed to initialize analytics:', error);
                 showError('Failed to load advanced analytics: ' + error.message);
+                showMLError('Failed to load advanced analytics. ' + error.message);
             }
         }
 
@@ -954,25 +1110,38 @@
         async function initializeMachineLearning() {
             try {
                 console.log('Initializing TensorFlow.js...');
+                updateMLProgress(42, 'Initializing TensorFlow.js runtime…');
+                updateMLSubtext('Loading TensorFlow.js and preparing GPU-optimized pipelines.');
                 
-                // Wait for TensorFlow to be ready
                 await tf.ready();
                 console.log('TensorFlow.js is ready');
+                updateMLProgress(46, 'TensorFlow.js ready. Building model architectures…');
+                updateMLSubtext('Building 8 neural network architectures for evaluation.');
+                console.log('Starting multi-model training process...');
                 
-                // Create a simple linear regression model for attendance prediction
-                mlModel = createAttendancePredictionModel();
+                mlModel = await trainMultipleModels();
                 
-                // Train the model with historical data
-                await trainModel();
+                if (mlModel) {
+                    updateMLProgress(62, 'Best model selected. Finalizing predictions…');
+                    updateMLSubtext('Optimizing predictions and preparing inference pipeline.');
+                } else {
+                    updateMLProgress(58, 'Using fallback analytics.');
+                    updateMLSubtext('Continuing with rule-based analytics due to limited training data.');
+                }
+                
+                console.log('Machine Learning initialization complete!');
                 
             } catch (error) {
                 console.error('ML initialization failed:', error);
-                // Continue without ML features
+                updateMLProgress(55, 'Machine learning features unavailable.');
+                updateMLSubtext('An error occurred while training the models. Using fallback analytics.');
             }
         }
-
-        function createAttendancePredictionModel() {
-            // Create a simple sequential model
+const modelArchitectures = [
+    {
+        name: 'Simple Neural Network',
+        id: 'simple_nn',
+        createModel: () => {
             const model = tf.sequential({
                 layers: [
                     tf.layers.dense({inputShape: [7], units: 16, activation: 'relu'}),
@@ -980,38 +1149,327 @@
                     tf.layers.dense({units: 1, activation: 'sigmoid'})
                 ]
             });
-            
             model.compile({
                 optimizer: tf.train.adam(0.01),
                 loss: 'binaryCrossentropy',
                 metrics: ['accuracy']
             });
-            
             return model;
         }
-
-        async function trainModel() {
-            if (!mlModel || !analyticsData) return;
-            
-            try {
-                // Prepare training data
-                const trainingData = prepareTrainingData();
-                
-                // Train the model
-                console.log('Training ML model...');
-                await mlModel.fit(trainingData.xs, trainingData.ys, {
-                    epochs: 50,
-                    batchSize: 32,
-                    validationSplit: 0.2,
-                    verbose: 0
-                });
-                
-                console.log('Model training completed');
-                
-            } catch (error) {
-                console.error('Model training failed:', error);
-            }
+    },
+    {
+        name: 'Deep Neural Network',
+        id: 'deep_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [7], units: 32, activation: 'relu'}),
+                    tf.layers.dense({units: 24, activation: 'relu'}),
+                    tf.layers.dense({units: 16, activation: 'relu'}),
+                    tf.layers.dense({units: 8, activation: 'relu'}),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.adam(0.005),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
         }
+    },
+    {
+        name: 'Wide Neural Network',
+        id: 'wide_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [7], units: 64, activation: 'relu'}),
+                    tf.layers.dense({units: 32, activation: 'relu'}),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.adam(0.01),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
+        }
+    },
+    {
+        name: 'Dropout Neural Network',
+        id: 'dropout_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [7], units: 32, activation: 'relu'}),
+                    tf.layers.dropout({rate: 0.2}),
+                    tf.layers.dense({units: 16, activation: 'relu'}),
+                    tf.layers.dropout({rate: 0.2}),
+                    tf.layers.dense({units: 8, activation: 'relu'}),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.adam(0.01),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
+        }
+    },
+    {
+        name: 'RMSprop Optimizer Network',
+        id: 'rmsprop_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [7], units: 24, activation: 'relu'}),
+                    tf.layers.dense({units: 12, activation: 'relu'}),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.rmsprop(0.01),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
+        }
+    },
+    {
+        name: 'Tanh Activation Network',
+        id: 'tanh_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [7], units: 20, activation: 'tanh'}),
+                    tf.layers.dense({units: 12, activation: 'tanh'}),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.adam(0.01),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
+        }
+    },
+    {
+        name: 'LeakyReLU Network',
+        id: 'leaky_relu_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({inputShape: [7], units: 28, activation: 'relu'}),
+                    tf.layers.leakyReLU({alpha: 0.1}),
+                    tf.layers.dense({units: 14, activation: 'relu'}),
+                    tf.layers.leakyReLU({alpha: 0.1}),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.adam(0.008),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
+        }
+    },
+    {
+        name: 'Regularized Network',
+        id: 'regularized_nn',
+        createModel: () => {
+            const model = tf.sequential({
+                layers: [
+                    tf.layers.dense({
+                        inputShape: [7], 
+                        units: 24, 
+                        activation: 'relu',
+                        kernelRegularizer: tf.regularizers.l2({l2: 0.001})
+                    }),
+                    tf.layers.dense({
+                        units: 12, 
+                        activation: 'relu',
+                        kernelRegularizer: tf.regularizers.l2({l2: 0.001})
+                    }),
+                    tf.layers.dense({units: 1, activation: 'sigmoid'})
+                ]
+            });
+            model.compile({
+                optimizer: tf.train.adam(0.01),
+                loss: 'binaryCrossentropy',
+                metrics: ['accuracy']
+            });
+            return model;
+        }
+    }
+];
+
+async function trainMultipleModels() {
+    if (!analyticsData || !analyticsData.records || analyticsData.records.length === 0) {
+        console.log('No data available for training');
+        updateMLProgress(55, 'Not enough data to train machine learning models.');
+        updateMLSubtext('We need more attendance history to train the predictive models. Using analytics without ML enhancements.');
+        return null;
+    }
+
+    console.log(`Preparing training data from ${analyticsData.records.length} records...`);
+    const trainingData = prepareTrainingData();
+    
+    if (!trainingData || trainingData.xs.shape[0] === 0) {
+        console.log('Insufficient training data');
+        if (trainingData) {
+            trainingData.xs.dispose();
+            trainingData.ys.dispose();
+        }
+        updateMLProgress(55, 'Not enough data to train machine learning models.');
+        updateMLSubtext('We need more attendance history to train the predictive models. Using analytics without ML enhancements.');
+        return null;
+    }
+
+    console.log(`Training data prepared: ${trainingData.xs.shape[0]} samples`);
+    console.log(`Starting training of ${modelArchitectures.length} different models...\n`);
+    updateMLProgress(48, 'Preparing data for multi-model training…');
+    updateMLSubtext('Evaluating multiple neural network architectures to find the most accurate predictor.');
+
+    const results = [];
+    let modelNumber = 1;
+    const totalModels = modelArchitectures.length;
+
+    for (const architecture of modelArchitectures) {
+        console.log(`\n[${modelNumber}/${modelArchitectures.length}] Training: ${architecture.name}`);
+        console.log(`   Model ID: ${architecture.id}`);
+        const progressBefore = 48 + ((modelNumber - 1) / totalModels) * 10;
+        updateMLProgress(progressBefore, `Training model ${modelNumber}/${totalModels}: ${architecture.name}`);
+        updateMLSubtext(`Training ${architecture.name} (${modelNumber} of ${totalModels}) to predict attendance outcomes.`);
+        
+        try {
+            const model = architecture.createModel();
+            const startTime = Date.now();
+            
+            // Train the model
+            console.log(`   Training started...`);
+            const history = await model.fit(trainingData.xs, trainingData.ys, {
+                epochs: 50,
+                batchSize: 32,
+                validationSplit: 0.2,
+                verbose: 0,
+                callbacks: {
+    onEpochEnd: (epoch, logs) => {
+        if (epoch % 10 === 0 || epoch === 49) {
+            const loss = logs.loss || 0;
+            const acc = logs.acc || logs.accuracy || 0;
+            console.log(`      Epoch ${epoch + 1}/50 - Loss: ${loss.toFixed(4)}, Accuracy: ${(acc * 100).toFixed(2)}%`);
+        }
+    }
+}
+            });
+
+            const trainingTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+// Get final metrics with safety checks
+const lossArray = history.history.loss || [0];
+const finalLoss = lossArray.length > 0 ? lossArray[lossArray.length - 1] : 0;
+
+const accuracyArray = history.history.acc || history.history.accuracy || [0];
+const finalAccuracy = accuracyArray.length > 0 ? accuracyArray[accuracyArray.length - 1] : 0;
+
+const valLossArray = history.history.val_loss;
+const valLoss = valLossArray && valLossArray.length > 0 ? valLossArray[valLossArray.length - 1] : null;
+
+const valAccuracyArray = history.history.val_acc || history.history.val_accuracy;
+const valAccuracy = valAccuracyArray && valAccuracyArray.length > 0 ? valAccuracyArray[valAccuracyArray.length - 1] : null;
+
+            console.log(`   Training complete in ${trainingTime}s`);
+            console.log(`   Final Training Accuracy: ${(finalAccuracy * 100).toFixed(2)}%`);
+            console.log(`   Final Training Loss: ${finalLoss.toFixed(4)}`);
+            if (valAccuracy) {
+                console.log(`   Validation Accuracy: ${(valAccuracy * 100).toFixed(2)}%`);
+                console.log(`   Validation Loss: ${valLoss.toFixed(4)}`);
+            }
+
+            results.push({
+                name: architecture.name,
+                id: architecture.id,
+                model: model,
+                accuracy: finalAccuracy,
+                loss: finalLoss,
+                valAccuracy: valAccuracy,
+                valLoss: valLoss,
+                trainingTime: parseFloat(trainingTime),
+                score: valAccuracy || finalAccuracy // Use validation accuracy if available
+            });
+            
+            const progressAfter = 48 + (modelNumber / totalModels) * 10;
+            updateMLProgress(progressAfter, `Completed model ${modelNumber}/${totalModels}: ${architecture.name}`);
+            updateMLSubtext(`Completed training for ${architecture.name}. Evaluating performance metrics…`);
+
+        } catch (error) {
+            console.error(`   Failed to train ${architecture.name}:`, error.message);
+            updateMLProgress(48 + (modelNumber / totalModels) * 10, `Failed to train ${architecture.name}. Continuing with remaining models…`);
+        }
+
+        modelNumber++;
+    }
+
+    // Clean up training data
+    trainingData.xs.dispose();
+    trainingData.ys.dispose();
+
+    if (results.length === 0) {
+        console.log('\nNo models trained successfully');
+        updateMLProgress(58, 'Unable to train machine learning models. Using fallback analytics.');
+        updateMLSubtext('An error occurred while training all models. Using analytics without ML enhancements.');
+        return null;
+    }
+
+    // Find the best model
+    console.log('\n' + '='.repeat(60));
+    console.log('TRAINING RESULTS SUMMARY');
+    console.log('='.repeat(60));
+    updateMLProgress(60, 'Evaluating trained models…');
+    updateMLSubtext('Selecting the most accurate model based on validation performance.');
+    
+    results.sort((a, b) => b.score - a.score);
+    
+    console.log('\nModel Rankings (by validation/training accuracy):');
+    results.forEach((result, index) => {
+        const medal = index === 0 ? '1st' : index === 1 ? '2nd' : index === 2 ? '3rd' : `${index + 1}.`;
+        console.log(`${medal} ${result.name}`);
+        console.log(`   Accuracy: ${(result.accuracy * 100).toFixed(2)}% | Loss: ${result.loss.toFixed(4)}`);
+        if (result.valAccuracy) {
+            console.log(`   Val Accuracy: ${(result.valAccuracy * 100).toFixed(2)}% | Val Loss: ${result.valLoss.toFixed(4)}`);
+        }
+        console.log(`   Training Time: ${result.trainingTime}s`);
+        console.log('');
+    });
+
+    const bestModel = results[0];
+    console.log('='.repeat(60));
+    console.log(`SELECTED MODEL: ${bestModel.name}`);
+    console.log(`   Final Accuracy: ${(bestModel.accuracy * 100).toFixed(2)}%`);
+    console.log(`   Final Loss: ${bestModel.loss.toFixed(4)}`);
+    if (bestModel.valAccuracy) {
+        console.log(`   Validation Accuracy: ${(bestModel.valAccuracy * 100).toFixed(2)}%`);
+    }
+    console.log(`   Training Time: ${bestModel.trainingTime}s`);
+    console.log('='.repeat(60));
+
+    // Dispose of models that weren't selected
+    results.forEach(result => {
+        if (result.id !== bestModel.id) {
+            result.model.dispose();
+        }
+    });
+
+    // Update UI with model info
+    document.getElementById('modelConfidence').textContent = `${(bestModel.score * 100).toFixed(0)}%`;
+    
+    return bestModel.model;
+}
 
         function prepareTrainingData() {
             const features = [];
