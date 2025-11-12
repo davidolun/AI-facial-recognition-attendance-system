@@ -165,3 +165,5 @@ test_*.py
 attendance.csv
 test_export.xlsx
 test_workbook.xlsx
+
+faceapp/views.py
